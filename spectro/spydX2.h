@@ -10,6 +10,7 @@
  *
  * Copyright 2006 - 2025, Graeme W. Gill
  * All rights reserved.
+ * Proposed changes: Fernando Voltolini de Azambuja, 2 October 2026.
  *
  * (Based on spydX.h)
  *
@@ -107,6 +108,10 @@ typedef struct {
 #define SPYDX2_NOCALIBS 5
 #define SPYD2024_NOCALIBS 7
 
+/* Number of calibration slots needed by either model */
+#define SPYDX2_MAXCALIBS (SPYD2024_NOCALIBS > SPYDX2_NOCALIBS \
+                          ? SPYD2024_NOCALIBS : SPYDX2_NOCALIBS)
+
 /* SPYDX2 communication object */
 struct _spydX2 {
 	INST_OBJ_BASE
@@ -134,7 +139,7 @@ struct _spydX2 {
 	inst_disptypesel *dtlist;	/* Display Type list */
 	int ndtlist;				/* Number of valid dtlist entries */
 
-	SpX2calinfo cinfo[SPYDX2_NOCALIBS];	/* cal & meas setup info indexed by native ix */
+	SpX2calinfo cinfo[SPYDX2_MAXCALIBS];	/* cal & meas setup info indexed by native ix */
 	
 	int ix;						/* current native cal index */
 	int cbid;					/* current calibration base ID, 0 if not a base */
