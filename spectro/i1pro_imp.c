@@ -11,6 +11,7 @@
  *
  * Copyright 2006 - 2014 Graeme W. Gill
  * All rights reserved.
+ * Proposed changes: Fernando Voltolini de Azambuja, 2 October 2026.
  *
  * This material is licenced under the GNU GENERAL PUBLIC LICENSE Version 2 or later :-
  * see the License2.txt file for licencing details.
@@ -10509,11 +10510,6 @@ i1pro_code i1pro_conv2XYZ(
 			}
 		}
 
-		/* Don't return spectral if not asked for */
-		if (!m->spec_en) {
-			vals[i].sp.spec_n = 0;
-		}
-
 	}
 
 	conv->del(conv);
@@ -10524,6 +10520,12 @@ i1pro_code i1pro_conv2XYZ(
 	/* Apply custom filter compensation */
 	if (m->custfilt_en)
 		ipatch_convert_custom_filter(vals, nvals, &m->custfilt, clamp);
+
+	/* Don't return spectral if not asked for */
+	if (!m->spec_en) {
+		for (i = 0; i < nvals; i++)
+			vals[i].sp.spec_n = 0;
+	}
 
 	return I1PRO_OK;
 }
