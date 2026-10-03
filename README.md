@@ -23,12 +23,12 @@ The baseline commit is `2d0acfa9a1d1e480b6ff0043fd57c83eca951dac`. All 1,838 imp
 
 Retained source-function tests demonstrate the array-capacity mismatch and conversion-order defect. The proposed code was compared with the tested code; the later changes to those excerpts are comments only. The note distinguishes the scripted tests from actual device behavior.
 
-Both fixes apply together and reverse exactly on 3.5.0 and the inspected `Argyll_V3.5.2_beta1` archive. That is a source compatibility check. This isolated two-fix checkout has not had a separate complete-tool build, Windows build or legacy compiler build. No Argyll tool was executed or device accessed in preparing this checkout.
+Both fixes apply together and reverse exactly on 3.5.0. The four changed files are byte-identical in the inspected `Argyll_V3.5.2_beta1` archive, so the defects and fixes are the same there. That is a source compatibility check. This isolated two-fix checkout has not had a separate complete-tool build, Windows build or legacy compiler build. No Argyll tool was executed or device accessed in preparing this checkout.
 
-No compiled Argyll tools are added. For upstream build instructions, see [Compiling.html](doc/Compiling.html).
+No compiled Argyll tools are added. The official USB installer and driver files under `usb/`, and bundled ZIPs such as `doc/i1proHiRes.zip` and `jpeg/jpegsr8d.zip`, remain byte-identical to the source archive. For upstream build instructions, see [Compiling.html](doc/Compiling.html).
 
 ## Upstream and licensing
 
 ArgyllCMS is developed by Graeme Gill. Please [support the upstream project](https://www.argyllcms.com/downloadsrc.html).
 
-All original component notices and licenses are retained: [License.txt](License.txt), [License2.txt](License2.txt) and [License3.txt](License3.txt). The four modified instrument files retain their GPL-2.0-or-later notices and identify the date and author of the proposed changes. This README and the review note are provided under GNU Free Documentation License 1.3, with no invariant sections or front/back cover texts; see [doc/DocLicense.txt](doc/DocLicense.txt).
+All original component notices and licenses are retained. ArgyllCMS as a whole is under the GNU Affero General Public License v3 ([License.txt](License.txt)); the instrument-driver files are under GPL-2.0-or-later ([License2.txt](License2.txt)); [License3.txt](License3.txt) is the GPL v3 text that upstream applies to `spectro/spec2cie.c` (see [ArgyllDoc.html](doc/ArgyllDoc.html)). The four modified instrument files retain their GPL-2.0-or-later notices and identify the date and author of the proposed changes. This README and the review note are provided under GNU Free Documentation License 1.3, with no invariant sections or front/back cover texts; see [doc/DocLicense.txt](doc/DocLicense.txt).
