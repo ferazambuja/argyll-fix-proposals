@@ -2,7 +2,7 @@
 
 > **Unofficial review fork.** Selected driver repair proposals prepared by Fernando Voltolini de Azambuja on 2 and 27 October 2026. This is not an official ArgyllCMS release. Software build and regression evidence is described below; none of these proposals has been tested on instruments by the contributor.
 
-The repository contains the complete [official ArgyllCMS 3.5.0 source](https://www.argyllcms.com/downloadsrc.html), followed by seven focused source commits:
+The repository contains the complete [official ArgyllCMS 3.5.0 source](https://www.argyllcms.com/downloadsrc.html), followed by eight focused source commits:
 
 - **Spyder 2024:** allow all seven advertised calibration slots to fit in the array. [Fix commit](https://github.com/ferazambuja/argyll-fix-proposals/commit/4f0ad6b52e0c86674bd6e2c5d5dc994fcf528229).
 - **i1Pro/i1Pro2, i1Pro3 and ColorMunki spectrophotometers:** apply requested XRGA conversion or custom-filter compensation before discarding an unrequested spectrum. [Fix commit](https://github.com/ferazambuja/argyll-fix-proposals/commit/994e311e094705712eb3c02a2189b3642860d779).
@@ -11,6 +11,7 @@ The repository contains the complete [official ArgyllCMS 3.5.0 source](https://w
 - **Specbos error recovery:** release the mutex after failed averaging setup and restore temporary calibration mode/state on averaging errors. [Fix commit](https://github.com/ferazambuja/argyll-fix-proposals/commit/de85e7aad046a43cdee3504a37b1eda8eb77fa8f).
 - **Spectral calibration state:** invalidate live dark/white data before replacement, preserve ColorMunki inner-dark completion metadata and restore the original i1Pro3 mode on the selected calibration failures. [Fix commit](https://github.com/ferazambuja/argyll-fix-proposals/commit/1c35dc47786bf4ef3fc8576b88788f126db0339d).
 - **Finite spectral results:** refuse nonfinite calibrated spectra and converted readings in i1Pro/i1Pro2, i1Pro3 and ColorMunki paths, preserving signed and zero finite values. [Fix commit](https://github.com/ferazambuja/argyll-fix-proposals/commit/e46f88eaa9b41a1314e16a23f091f7aa170558fe).
+- **i1Pro3 calibration follow-up:** complete mode/error cleanup, release failed wavelength captures, and repair integration-time selection and saturated emission-buffer release. [Fix commit](https://github.com/ferazambuja/argyll-fix-proposals/commit/70c6f9b38d74d9697020a594b260e7b42c38fa74).
 
 The [original review note](review/DRIVER_FIXES.md) covers the first two proposals. The [Specbos note](review/SPECBOS_2501.md) explains #706. The [four-group follow-up note](review/PRIORITY_FIXES.md) explains the added failures, source changes, code fit, dependencies and validation limits. Six upstream files change; README, review documentation and regression files are added. Upstream's [ReadMe.txt](ReadMe.txt) and build recipes remain intact.
 
@@ -28,7 +29,7 @@ The baseline commit is `2d0acfa9a1d1e480b6ff0043fd57c83eca951dac`. All 1,838 imp
 
 Retained source-function tests demonstrate the array-capacity mismatch and conversion-order defect. The proposed code was compared with the tested code; the later changes to those excerpts are comments only. The original note distinguishes the scripted tests from actual device behavior.
 
-The complete source diff applies and reverses exactly on official 3.5.0. Each of the four new source commits also applies independently after the previously published proposal tip, `e924058`. That existing tip includes the capacity repair, XYZ-only conversion ordering and #706 mutex fix. In particular, the finite-result proposal retains that conversion order. Earlier development-snapshot comparisons retain their original scope in the two older notes; the four new exports were validated against stable 3.5.0.
+The complete source diff applies and reverses exactly on official 3.5.0. Each of the original four follow-up source commits also applies independently after the published proposal tip `e924058`. That tip includes the capacity repair, XYZ-only conversion ordering and #706 mutex fix. The i1Pro3 cleanup follow-up applies after the reviewed `a3a1292` tip. In particular, the finite-result proposal retains the earlier conversion order. When taking that proposal alone, use the [standalone finite-results patch](review/finite-results.patch), which includes its own dated modification notices. Earlier development-snapshot comparisons retain their original scope in the two older notes; the new exports were validated against stable 3.5.0.
 
 From a Git clone, run the four-group source regressions with Python 3 and a C99 compiler, followed by the #706 real-mutex test with POSIX threads:
 

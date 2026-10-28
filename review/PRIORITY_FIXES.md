@@ -9,7 +9,9 @@ Prepared 27 October 2026. These are selected repairs to Argyll's own drivers. Th
 | Spectral calibration state | Live replacement can overwrite dark/white data while an earlier valid flag remains set. ColorMunki inner-dark completion retains mismatched exposure metadata. | [1c35dc4](https://github.com/ferazambuja/argyll-fix-proposals/commit/1c35dc47786bf4ef3fc8576b88788f126db0339d) |
 | Finite results | Calibrated spectral scaling, XYZ integration/percentage scaling or corrections can produce nonfinite values without a reading error. | [e46f88e](https://github.com/ferazambuja/argyll-fix-proposals/commit/e46f88eaa9b41a1314e16a23f091f7aa170558fe) |
 
-Each new source commit applies separately after the already published `e924058` tip. That tip includes the original capacity and XYZ-order proposals and the #706 LED mutex repair. Tests and this explanation are separate from the four source commits. The complete six-file source diff also applies to the authenticated official 3.5.0 import and reverses exactly to its original bytes.
+Each of the original four source commits applies separately after the published `e924058` tip. That tip includes the original capacity and XYZ-order proposals and the #706 LED mutex repair. The [i1Pro3 cleanup follow-up](https://github.com/ferazambuja/argyll-fix-proposals/commit/70c6f9b38d74d9697020a594b260e7b42c38fa74) applies after the independently reviewed `a3a1292` tip. Tests and explanations remain separate from source commits. The complete six-file source diff applies to the authenticated official 3.5.0 import and reverses exactly to its original bytes.
+
+To take only the finite-results proposal after `e924058`, use [finite-results.patch](finite-results.patch). It contains the same tested finite-result code with the dated modification notice included in each affected file. The historical `e46f88e` commit remains unchanged; its header notices originally came from the preceding calibration-state commit. The standalone export applies and reverses exactly and requires no calibration-state or cleanup follow-up.
 
 ## Spyder 2024 measurement-path selection
 
@@ -35,13 +37,21 @@ The regression executes the actual averaging, calibration and calibration-assess
 
 The i1Pro/i1Pro2 and ColorMunki calibration paths write directly into live dark buffers. Acquisition can overwrite that buffer before returning an error. An old `dark_valid` or `idark_valid` flag must therefore be cleared before replacement starts. Existing success points revalidate the completed capture.
 
-The same principle applies to live white data and factors. This proposal clears `cal_valid` before the initial i1Pro/i1Pro2 and ColorMunki white acquisition and before i1Pro3 reflective/transmission calibration. The three affected i1Pro3 callback-error exits also restore `m->mmode`, following the neighboring calibration code. The i1Pro scan gain-switch paths invalidate a dark calibration whose gain has changed; this export adds no gain-switch remeasurement.
+The same principle applies to live white data and factors. This proposal clears `cal_valid` before the initial i1Pro/i1Pro2 and ColorMunki white acquisition and before i1Pro3 reflective/transmission calibration. The original proposal restored `m->mmode` on three white-calibration error exits; the cleanup follow-up now restores it on all eight early returns in the i1Pro3 per-mode loop. This follows the mode-restore pattern in the i1Pro and ColorMunki calibration routines. The i1Pro scan gain-switch paths invalidate a dark calibration whose gain has changed; this export adds no gain-switch remeasurement.
 
 After ColorMunki's inner reflective dark capture succeeds, it now records `dark_valid`, pending-calibration state, date, integration time and gain using the same assignments as its initial-dark completion. If that capture fails, its data remain invalid. If a later white callback fails, the completed dark data retain matching metadata while white data stay invalid.
 
-The tests execute selected actual acquisition prefixes with a helper that overwrites a live buffer before returning success or failure. Twenty i1Pro and sixteen ColorMunki cases cover initial validity and both outcomes. White-dispatch prefixes run with overwrite-before-error callbacks, including both i1Pro3 reflective paths and transmission. A separate four-scenario ColorMunki reflective-white tail checks completion metadata and failure after each covered capture/conversion callback.
+The tests execute selected actual acquisition prefixes with a helper that overwrites a live buffer before returning success or failure. Twenty i1Pro and sixteen ColorMunki cases cover initial validity and both outcomes. Each case now checks the specific validity flag owning the written buffer and requires the other flag to remain unchanged. Five temporary wrong-flag/both-flags mutations were rejected. White-dispatch prefixes run with overwrite-before-error callbacks, including both i1Pro3 reflective paths and transmission. A separate four-scenario ColorMunki reflective-white tail checks completion metadata and failure after each covered capture/conversion callback.
 
-All current cases pass. The predecessor has 92 failures in the white-dispatch probe, ten in the selected i1Pro dark prefixes, eight in the ColorMunki prefixes and five in the inner-dark completion probe. These counts describe assertions in bounded probes, not instrument measurements. The adaptive-scan ownership and gain-switch invalidations also rely on source inspection; their full acquisition paths are not executed here. White-factor return-value validation, exposure-selection repairs, high-resolution coefficient transactions and other calibration changes remain outside this selected proposal.
+All current cases pass. The predecessor has 92 failures in the white-dispatch probe, ten in the selected i1Pro dark prefixes, eight in the ColorMunki prefixes and five in the inner-dark completion probe. These counts describe assertions in bounded probes, not instrument measurements. The adaptive-scan ownership and gain-switch invalidations also rely on source inspection; their full acquisition paths are not executed here. White-factor return-value validation, high-resolution coefficient transactions and other calibration changes remain outside this selected proposal.
+
+### i1Pro3 cleanup and integration-time follow-up
+
+Independent review found five remaining per-mode returns that left the faked mode installed. The follow-up restores the caller mode on wavelength acquisition, wavelength matching, filter construction, adaptive-dark and integration-time probe failures. The first two exits also release their allocated wavelength vector. Two callback diagnostics now name the function that actually failed.
+
+Tracing the integration-time return exposed a separate control-flow defect: `ev != I1PRO3_RD_SENSORSATURATED` returned early on success, leaking the returned raw buffer and leaving selection incomplete; saturation fell through to a completed-selection flag. The follow-up clears prior selection validity before the probe, returns errors/saturation, and completes successful averaging, exposure selection and raw-buffer release. A nonpositive maximum uses the same floor as existing adaptive exposure selection. The simple-emission helper now releases a saturated emission buffer with `i1p3mm_em`, matching its actual `-1` allocation origin rather than the reflective `-9` origin.
+
+Sixteen source-bound exit cases check every per-mode early return in current and non-current modes, including wavelength release. The reviewed `a3a1292` source fails seven cases; current source passes all sixteen. Another sixteen scenarios execute the complete actual calibration, need-assessment, simple-emission and raw-release functions with real headers and inert acquisition/allocation helpers. They cover successful exposure reduction, minimum/no-increase bounds, zero/negative maxima, saturation, transport errors, prior-valid refreshes, all-modes restoration, deferred requests and unchanged adaptive/scan exclusions. The reviewed source fails eleven scenarios; current source passes all sixteen. These are software state/ownership checks, not physical exposure or optical validation. The probe suppresses the unchanged upstream header's `id[100]` versus `CALIDLEN` array-parameter warning; both declarations decay to the same pointer type.
 
 ## Nonfinite spectral/XYZ results
 
@@ -63,7 +73,7 @@ The actual i1Pro/i1Pro2 and ColorMunki scalers plus their callers' publication t
 
 ## Ordinary Argyll build and platform scope
 
-The exact combined production source is commit `e46f88eaa9b41a1314e16a23f091f7aa170558fe`. The [validation receipt](VALIDATION.json) binds all six modified source/header files by SHA-256.
+The exact combined production source is commit `70c6f9b38d74d9697020a594b260e7b42c38fa74`. The [validation receipt](VALIDATION.json) binds all six modified source/header files by SHA-256.
 
 On macOS arm64 with Apple Clang 21.0.0, the ordinary default build passed:
 
@@ -73,7 +83,7 @@ jam -q -fJambase -j3
 
 The build used the unchanged `Jambase`, `Jamtop`, `Jamfile` and subdirectory build files. It linked ordinary `spotread`, `chartread`, `dispread`, `dispcal`, `ccxxmake` and `illumread` as arm64 executables, together with the default build's other targets. No source substitutions, application workers or custom build recipe were used. The build emitted 63 warning lines in unchanged upstream files, including deprecated macOS interfaces, upstream pragma messages and linker/configuration warnings. None was located in the five changed C driver files.
 
-Those five drivers also separately compiled as complete objects using `-std=gnu89`, `-Werror=implicit-function-declaration` and `-Werror=return-type`, with ordinary project headers. This supports the changed code's dialect/interface fit; it is not strict-C89 qualification of the complete upstream tree or a test with an old Visual C++ compiler.
+Those five drivers also separately compiled as complete objects using `-std=gnu89`, `-Werror=implicit-function-declaration` and `-Werror=return-type`, with ordinary project headers. The corrected i1Pro3 object was recompiled; the other four source files are byte-identical to the earlier checked files and reuse that object-check evidence. The ordinary Jam build was freshly repeated on the complete combined source. This supports the changed code's dialect/interface fit; it is not strict-C89 qualification of the complete upstream tree or a test with an old Visual C++ compiler.
 
 From a Git clone containing the published predecessor, reproduce the focused checks with Python 3 and a C99 compiler, then the POSIX-thread LED check:
 

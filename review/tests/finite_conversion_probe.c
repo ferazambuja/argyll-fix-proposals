@@ -47,7 +47,6 @@ typedef cm_imp i1proimp;
 typedef cm_device i1pro;
 #define CM_OK I1PRO_OK
 #define CM_INCONS I1PRO_RD_READINCONS
-#define CM_FILTER I1PRO_INT_CIECONVFAIL
 #define CM_CONVERT(p,v,n,r) i1pro_conv2XYZ(p,v,n,r,0)
 #elif FAMILY == 2
 typedef cm_state i1pro3_state;
@@ -55,7 +54,6 @@ typedef cm_imp i1pro3imp;
 typedef cm_device i1pro3;
 #define CM_OK I1PRO3_OK
 #define CM_INCONS I1PRO3_RD_READINCONS
-#define CM_FILTER I1PRO3_INT_CIECONVFAIL
 #define CM_CONVERT(p,v,n,r) i1pro3_conv2XYZ(p,v,n,r,0,0)
 #elif FAMILY == 3
 typedef cm_state munki_state;
@@ -63,7 +61,6 @@ typedef cm_imp munkiimp;
 typedef cm_device munki;
 #define CM_OK MUNKI_OK
 #define CM_INCONS MUNKI_RD_READINCONS
-#define CM_FILTER MUNKI_INT_CIECONVFAIL
 #define CM_CONVERT(p,v,n,r) munki_conv2XYZ(p,v,n,r,0)
 #else
 #error Unknown source family
@@ -97,7 +94,7 @@ typedef struct _xsp2cie {
 #define a1logd(...) ((void)0)
 
 static int conversions, deletions, xrga_calls, filter_calls;
-static int fault_row, sum_xyz, poison_xrga, poison_filter, refuse_filter, reflective;
+static int fault_row, sum_xyz, poison_xrga, poison_filter, reflective;
 static void convert_stub(xsp2cie *self, double *xyz, xspect *sp) {
 	(void)self;
 	conversions++;
@@ -108,17 +105,15 @@ static void convert_stub(xsp2cie *self, double *xyz, xspect *sp) {
 static void delete_stub(xsp2cie *self) { (void)self; deletions++; }
 static xsp2cie converter = { convert_stub, delete_stub };
 #define new_xsp2cie(...) (&converter)
-static int xrga_stub(ipatch *values) {
+static void xrga_stub(ipatch *values) {
 	xrga_calls++;
     if (poison_xrga && reflective) values[fault_row].XYZ[2] = INFINITY;
-	return 0;
 }
 #define ipatch_convert_xrga(values,...) xrga_stub(values)
-static int filter_stub(ipatch *values, int count, xspect *filter, instClamping clamp) {
+static void filter_stub(ipatch *values, int count, xspect *filter, instClamping clamp) {
 	(void)count; (void)filter; (void)clamp;
 	filter_calls++;
     if (poison_filter) values[fault_row].XYZ[0] = INFINITY;
-    return refuse_filter;
 }
 #define ipatch_convert_custom_filter(...) filter_stub(__VA_ARGS__)
 
@@ -156,7 +151,7 @@ static void one(const char *name) {
 	state.spec_en = 1;
 	state.ms[0].emiss = 1;
 	conversions = deletions = xrga_calls = filter_calls = 0;
-    sum_xyz = poison_xrga = poison_filter = refuse_filter = 0;
+    sum_xyz = poison_xrga = poison_filter = 0;
     fault_row = strstr(name, "second") ? 1 : 0;
     if (!strcmp(name, "normal") || !strcmp(name, "normal-two")) {
 		/* Valid emissive control. */
@@ -171,8 +166,6 @@ static void one(const char *name) {
         band[0][0] = band[1][0] = -0.25;
     } else if (!strcmp(name, "zero-two")) {
         memset(band, 0, sizeof band);
-    } else if (!strcmp(name, "filter-refusal-two")) {
-        state.custfilt_en = refuse_filter = 1;
     } else if (strstr(name, "nonfinite-input")) {
         band[fault_row][0] = INFINITY; invalid = before_cie = 1;
     } else if (strstr(name, "reflectance-scale-overflow")) {
@@ -212,12 +205,12 @@ static void one(const char *name) {
 		       && xrga_calls == (before_correction ? 0 : 1)
                && filter_calls == (poison_filter ? 1 : 0));
 	} else {
-        expect(name, rc == (refuse_filter ? CM_FILTER : CM_OK) && deletions == 1
+        expect(name, rc == CM_OK && deletions == 1
                && conversions == count && xrga_calls == 1
-               && filter_calls == refuse_filter && finite);
+               && filter_calls == 0 && finite);
         for (i = 0; i < count; i++) {
             expect(name, result[i].XYZ_v
-                   && (refuse_filter || result[i].sp.spec_n == (state.spec_en ? 2 : 0)));
+                   && result[i].sp.spec_n == (state.spec_en ? 2 : 0));
             printf("CONTROL %s %d %a %a %a %a\n", name, i,
                    result[i].sp.spec[0], result[i].sp.spec[1], result[i].XYZ[0], result[i].XYZ[1]);
         }

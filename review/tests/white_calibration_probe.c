@@ -1,7 +1,7 @@
 /* Copyright 2026 Fernando Voltolini de Azambuja.
  * SPDX-License-Identifier: GPL-2.0-or-later
  * Production source extracts retain Graeme Gill's original notices. */
-/* Exact white-calibration dispatch prefixes and EEPROM-time branches from
+/* Exact white-calibration dispatch prefixes from
  * ArgyllCMS 3.5.0. Helpers are scripted; no transport or cache is linked.
  * Prefixes end at the driver's first successful validity assignment. */
 #include <stdio.h>
@@ -67,7 +67,7 @@ static int munki_compute_wav_whitemeas(device *p,double *a,double *b,double *w) 
 static int munki_compute_white_cal(device *p,double *a,double *b,double *c,
  double *d,double *e,double *f) {
  (void)p;(void)a;(void)b;(void)c;(void)d;(void)e;(void)f;
- return script==3?-1:0;		/* -1: the read cannot give usable factors */
+ return 0;
 }
 static int reflective(device *p,inst_cal_type *calt,inst_cal_cond *calc) {
  meter *m=p->m; state *s=&m->s; int ev=0,mmode=9; time_t cdate=1000;
@@ -99,7 +99,6 @@ static int white_case(int cfg,int fault,int which_script) {
  cc=cfg<2?inst_calc_man_ref_white:cfg==2?inst_calc_man_cal_smode:inst_calc_man_trans_white;
  active=s;calls=0;fail_at=fault;script=which_script;
  ev=cfg<2?reflective(&p,&ct,&cc):cfg==3?transmission(&p,&ct,&cc):munki_white(&p,&ct,&cc);
- if(which_script==3) check(ev==MUNKI_RD_WHITEREFERROR,"unusable white factors refused");
  if(ev) {
   check(!s->cal_valid,"refused white calibration invalid");
   check(m.mmode==9,"failure restores mode");

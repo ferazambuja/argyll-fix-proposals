@@ -1,0 +1,2 @@
+# Preserve upstream whitespace in the standalone patch's context lines.
+finite-results.patch -whitespace

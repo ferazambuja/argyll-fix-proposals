@@ -22,6 +22,7 @@ from source_extract import _block, _define, _enum, _extract, _function
 ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
 BEFORE = "e924058ee3b23e49be5053e0ab2bc73e727354c4"
+REVIEWED = "a3a12922613b59fcae56ba39e1d496b6ab8fa76c"
 CC = shlex.split(os.environ.get("CC", "cc"))
 
 
@@ -226,6 +227,7 @@ def dark(tmp):
             end = text.index("\n}\n", start)
             text = text[start:end]
             wrappers = []
+            owners = []
             for match in re.finditer(r"if \(\(ev = " + family
                                     + r"_dark_measure\(p, s->(dark_data|idark_data\[0\]),", text):
                 log = text.rfind("a1logd(", 0, match.start())
@@ -243,6 +245,7 @@ def dark(tmp):
                 block = text[match.start():end]
                 prefix = text[begin:match.start()] + block
                 index = len(wrappers)
+                owners.append(1 if match[1] == "idark_data[0]" else 0)
                 wrappers.append("static int capture" + str(index) + "(device *p, state *s) {\n"
                                 "imp *m=p->m; int ev=0, nummeas=1, mmode=9, stm=0;\n"
                                 + prefix + "\nreturn ev;\n}\n")
@@ -266,12 +269,14 @@ static int measure(device *p,double *data,int count,double *time,int gain) {
             harness += "int main(void) {\nint k,valid,e,rc;imp m={0};device p={&m,0};state s;double d;\n"
             harness += "int (*captures[])(device*,state*)={" + ",".join(
                 "capture" + str(i) for i in range(len(wrappers))) + "};\n"
+            harness += "int owns_idark[]={" + ",".join(map(str, owners)) + "};\n"
             harness += """for(k=0;k<(int)(sizeof captures/sizeof *captures);k++) {
  for(valid=0;valid<2;valid++)for(e=0;e<2;e++) {
   memset(&s,0,sizeof s);s.dark_valid=s.idark_valid=valid;
   s.dark_data=s.idark_data[0]=&d;d=7;error=e?42:0;
   rc=captures[k](&p,&s);
-  if(rc!=error || d!=99 || (s.dark_valid && s.idark_valid)) {
+  if(rc!=error || d!=99 || (owns_idark[k] ? s.idark_valid!=0 || s.dark_valid!=valid
+                                       : s.dark_valid!=0 || s.idark_valid!=valid)) {
    printf("FAIL dark prefix %d validity=%d error=%d\\n",k,valid,e);failures++;
   }
  }
@@ -359,6 +364,130 @@ int main(void) {
     print("PASS i1pro3 flash scaling: predecessor 2 failures; current 5 cases, 0 failures")
 
 
+def calibration_cleanup(tmp):
+    """Check every return while i1Pro3's per-mode loop owns a faked mode."""
+    for before in (True, False):
+        text = (subprocess.check_output(["git", "show", REVIEWED + ":spectro/i1pro3_imp.c"],
+                                        cwd=ROOT, text=True) if before
+                else source("spectro/i1pro3_imp.c"))
+        cal = _function(text, "i1pro3_imp_calibrate")
+        loop = cal[cal.index("m->mmode = sx;"):cal.index("\t}\t/* Look at next mode */")]
+        fake = loop[:loop.index("\n")]
+        # Select the if block that owns each actual error return, regardless
+        # of its callback's logging wording or return-condition correction.
+        calls = ("i1pro3_wl_measure", "i1pro3_match_wl_meas", "i1pro3_compute_wav_filters",
+                 "i1pro3_adapt_emis_cal", "i1pro3_pol_refl_cal", "i1pro3_refl_cal",
+                 "i1pro3_trans_cal", "i1pro3_spot_simple_emis_raw_meas")
+        fragments = []
+        for index, name in enumerate(calls):
+            at = loop.index("ev = " + name + "(")
+            if name in calls[-2:]:
+                at = loop.index("if (ev !=", at)
+            else:
+                at = loop.rfind("if ((ev =", 0, at + len("ev ="))
+            block = _block(loop[at:loop.index("return ev;", at) + len("return ev;")
+                                      + len("\n\t\t\t\t\t}")], loop[at:loop.index("{", at)])
+            body = block[block.index("{") + 1:block.rindex("}")]
+            fragments.append("static int fail" + str(index) + "(imp *m, double *wlraw) {\n"
+                             "int mmode=m->mmode, sx=1, ev=7;\n" + fake + "\n" + body + "\n}\n")
+        assert len(re.findall(r"\breturn\b", loop)) == len(calls)
+        harness = """#include <stdio.h>
+typedef struct {int mmode,nraw;} imp;
+static int frees,bad_free;
+#define a1logd(...) ((void)0)
+static void release(double *p,int lo,int hi) {
+ if (!p || lo!=-1 || hi!=127) bad_free++;
+ frees++;
+}
+#define free_dvector release
+""" + "".join(fragments)
+        harness += "int main(void) {int k,mode,rc,bad=0;double raw;imp m;\n"
+        harness += "int (*tests[])(imp*,double*)={" + ",".join(
+            "fail" + str(i) for i in range(len(calls))) + "};\n"
+        harness += """for(k=0;k<8;k++)for(mode=0;mode<2;mode++) {
+ m.mmode=mode?9:1;m.nraw=128;frees=bad_free=0;rc=tests[k](&m,&raw);
+ if(rc!=7 || m.mmode!=(mode?9:1) || frees!=(k<2) || bad_free) {
+  printf("FAIL calibration exit %d mode %d\\n",k,mode);bad++;
+ }
+}
+printf("cleanup: %d failures\\n",bad);return bad!=0;
+}
+"""
+        result = run(tmp, "calibration-cleanup-" + str(before), harness, {})
+        expect(result, 7 if before else 0)
+    print("PASS i1pro3 cleanup: reviewed source 7 failures; current 16 exit cases, 0 failures")
+
+
+def integration_selection(tmp):
+    harness = (HERE / "i1pro3_calibration_probe.c").read_text()
+    for before in (True, False):
+        text = (subprocess.check_output(["git", "show", REVIEWED + ":spectro/i1pro3_imp.c"],
+                                        cwd=ROOT, text=True) if before
+                else source("spectro/i1pro3_imp.c"))
+        constants = "".join(_define(text, name) for name in ("MX_NRAW", "LED_OFF_TIME"))
+        acquisition = _function(text, "i1pro3_do_measure")
+        assert "raw = dmatrix(0, nummeas-1, -1, m->nraw-1);" in acquisition
+        constants += "#define CM_EMISSION_ROW_ORIGIN -1\n"
+        funcs = "\n".join(_function(text, name) for name in (
+            "i1pro3_imp_get_n_a_cals", "i1pro3_imp_calibrate",
+            "i1pro3_spot_simple_emis_raw_meas", "i1pro3_free_raw"))
+        # The unchanged upstream prototype uses id[100], while the definition
+        # uses CALIDLEN (200). Both parameters decay to the same pointer type.
+        flags = ["-DSALONEINSTLIB", "-DUNIX", "-Wno-array-parameter"]
+        for folder in ("h", "numlib", "icc", "rspl", "cgats", "xicc", "spectro", "gamut", "plot"):
+            flags += ["-I", str(ROOT / folder)]
+        result = run(tmp, "integration-selection-" + str(before), harness,
+                     {"constants.inc": constants, "functions.inc": funcs,
+                      "sa_config.h": source("h/aconfig.h")}, flags)
+        assert result.returncode == 0, result.stdout + result.stderr
+        records = [json.loads(line) for line in result.stdout.splitlines()]
+        assert len(records) == 16
+        failures = []
+        for row in records:
+            name = row["case"]
+            valid = row["final_mode"] == row["original_mode"]
+            valid &= row["live_buffers"] == row["wrong_free_origin"] == 0
+            if name in ("success_reduce", "success_noincrease", "success_minimum",
+                        "prior_valid_success", "zero_maximum", "negative_maximum"):
+                value = (0.01 if name == "success_minimum" else
+                         1.0 if name in ("success_noincrease", "zero_maximum", "negative_maximum")
+                         else 0.02025)
+                valid &= (row["return_code"] == row["ok_code"] and row["done"] == 1
+                          and row["remaining"] == 0 and row["date"] == 12345
+                          and row["reads"] == row["averages"] == row["frees"] == row["saves"] == 1
+                          and abs(row["inttime"] - value) < 1e-12)
+            elif name in ("saturated", "prior_valid_saturated", "measure_error",
+                          "prior_valid_error", "all_modes_error"):
+                error = row["saturation_code"] if "saturated" in name else row["error_code"]
+                valid &= (row["return_code"] == error and row["done"] == 0
+                          and row["reads"] == 1 and row["averages"] == row["saves"] == 0
+                          and row["frees"] == (1 if "saturated" in name else 0)
+                          and row["date"] == (11111 if name.startswith("prior_valid") else 0))
+            elif name == "pending_other":
+                valid &= (row["done"] == 1 and row["remaining"] == row["dark_bit"]
+                          and row["return_code"] == row["setup_code"] and row["saves"] == 0)
+            elif name == "wrong_condition":
+                valid &= (row["return_code"] == row["setup_code"] and row["reads"] == row["done"] == 0
+                          and bool(row["remaining"] & row["integration_bit"]))
+            else:
+                assert name in ("needed_request", "adaptive_ignored", "scan_ignored"), name
+                valid &= row["reads"] == row["done"] == 0
+                if name == "needed_request":
+                    valid &= row["return_code"] == row["ok_code"] and row["remaining"] == 0
+                else:
+                    valid &= row["inttime"] == 0.5
+            if not valid:
+                failures.append(name)
+        if before:
+            assert set(failures) == {"success_reduce", "success_noincrease", "success_minimum",
+                                     "saturated", "all_modes_error", "pending_other",
+                                     "prior_valid_success", "prior_valid_saturated", "prior_valid_error",
+                                     "zero_maximum", "negative_maximum"}, failures
+        else:
+            assert not failures, failures
+    print("PASS i1pro3 integration selection: reviewed source 11 failures; current 16 scenarios, 0 failures")
+
+
 def main():
     with tempfile.TemporaryDirectory(prefix="argyll-driver-regression-") as tmp:
         folder = Path(tmp)
@@ -369,6 +498,8 @@ def main():
         conversions(folder)
         scaled(folder)
         flash(folder)
+        calibration_cleanup(folder)
+        integration_selection(folder)
     print("PASS: temporary sources and compiler products removed; no instrument access")
 
 

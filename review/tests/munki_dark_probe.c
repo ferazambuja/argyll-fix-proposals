@@ -63,7 +63,7 @@ static int munki_compute_white_cal(munki *p, double *factor1, double *ref1,
                                      double *read2) {
     (void)p; (void)factor1; (void)ref1; (void)read1;
     (void)factor2; (void)ref2; (void)read2;
-    return fail_step == 4 ? -1 : 0;
+    return 0;
 }
 static munki_code probe_white_tail(munki *p, inst_cal_type *calt) {
     munkiimp *m = p->m;
