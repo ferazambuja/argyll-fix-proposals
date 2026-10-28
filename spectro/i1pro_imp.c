@@ -101,6 +101,11 @@
 #include "icoms.h"
 #include "sort.h"
 
+/* Return nz if the value is finite, including signed and zero values */
+static int i1pro_double_finite(double value) {
+	return value >= -DBL_MAX && value <= DBL_MAX;
+}
+
 /* Configuration */
 #define ENABLE_2		/* [Def] Enable i1pro2/Rev E driver code, else treat i1pro2 as i1pro */
 #undef USE_HIGH_GAIN_MODE /* [Und] Make use of high gain mode in Rev A-D mode */ 
@@ -5505,6 +5510,18 @@ i1pro_code i1pro_read_patches_1(
 	return ev;
 }
 
+/* Return nz if the scaled readings are finite */
+static int i1pro_scaled_finite(i1pro *p, double **rows, int count) {
+	i1proimp *m = (i1proimp *)p->m;
+	int i, j;
+
+	for (i = 0; i < count; i++)
+		for (j = 0; j < m->nwav[m->highres]; j++)
+			if (!i1pro_double_finite(rows[i][j]))
+				return 0;
+	return 1;
+}
+
 /* Take a measurement reading using the current mode, part 2 */
 /* Converts to completely processed output readings. */
 i1pro_code i1pro_read_patches_2(
@@ -5703,6 +5720,10 @@ i1pro_code i1pro_read_patches_2(
 
 	/* Scale to the calibrated output values */
 	i1pro_scale_specrd(p, specrd, numpatches, specrd);
+	if (!i1pro_scaled_finite(p, specrd, numpatches)) {
+		a1logd(p->log,2,"i1pro_read_patches: nonfinite calibrated spectrum\n");
+		return I1PRO_RD_READINCONS;
+	}
 
 #ifdef PLOT_DEBUG
 	printf("Calibrated measurement spectra:\n");
@@ -5771,6 +5792,10 @@ i1pro_code i1pro_read_patches_2a(
 
 	/* Scale to the calibrated output values */
 	i1pro_scale_specrd(p, specrd, numpatches, specrd);
+	if (!i1pro_scaled_finite(p, specrd, numpatches)) {
+		a1logd(p->log,2,"i1pro_read_patches: nonfinite calibrated spectrum\n");
+		return I1PRO_RD_READINCONS;
+	}
 
 #ifdef PLOT_DEBUG
 	printf("Calibrated measuerment spectra:\n");
@@ -10415,6 +10440,23 @@ static double opt_adj_weights[21] = {
 	9.2709981544886391e+122, 3.7958270103353899e-153, 7.1366083837501666e-154
 };
 
+/* Return nz if the spectral and XYZ values are finite */
+static int i1pro_patch_finite(const ipatch *v) {
+	int j;
+
+	if (v->sp.spec_n < 0 || v->sp.spec_n > XSPECT_MAX_BANDS
+	 || !i1pro_double_finite(v->sp.norm) || v->sp.norm <= 0.0)
+		return 0;
+	for (j = 0; j < v->sp.spec_n; j++)
+		if (!i1pro_double_finite(v->sp.spec[j]))
+			return 0;
+	if (v->XYZ_v)
+		for (j = 0; j < 3; j++)
+			if (!i1pro_double_finite(v->XYZ[j]))
+				return 0;
+	return 1;
+}
+
 /* Convert from spectral to XYZ, and transfer to the ipatch array. */
 /* Apply XRGA conversion if needed */
 i1pro_code i1pro_conv2XYZ(
@@ -10480,6 +10522,11 @@ i1pro_code i1pro_conv2XYZ(
 				vals[i].sp.spec[k] = specrd[i][j] * sms;
 			}
 			vals[i].sp.norm = 1.0;
+			if (!i1pro_patch_finite(&vals[i])) {
+				a1logd(p->log,2,"i1pro_conv2XYZ: nonfinite spectrum\n");
+				conv->del(conv);
+				return I1PRO_RD_READINCONS;
+			}
 
 			/* Set the XYZ */
 			conv->convert(conv, vals[i].XYZ, &vals[i].sp);
@@ -10503,6 +10550,11 @@ i1pro_code i1pro_conv2XYZ(
 				vals[i].sp.spec[k] = 100.0 * specrd[i][j] * sms;
 			}
 			vals[i].sp.norm = 100.0;
+			if (!i1pro_patch_finite(&vals[i])) {
+				a1logd(p->log,2,"i1pro_conv2XYZ: nonfinite spectrum\n");
+				conv->del(conv);
+				return I1PRO_RD_READINCONS;
+			}
 
 			/* Set the XYZ */
 			conv->convert(conv, vals[i].XYZ, &vals[i].sp);
@@ -10520,6 +10572,12 @@ i1pro_code i1pro_conv2XYZ(
 			}
 		}
 
+		if (!i1pro_patch_finite(&vals[i])) {
+			a1logd(p->log,2,"i1pro_conv2XYZ: nonfinite converted reading\n");
+			conv->del(conv);
+			return I1PRO_RD_READINCONS;
+		}
+
 	}
 
 	conv->del(conv);
@@ -10530,6 +10588,12 @@ i1pro_code i1pro_conv2XYZ(
 	/* Apply custom filter compensation */
 	if (m->custfilt_en)
 		ipatch_convert_custom_filter(vals, nvals, &m->custfilt, clamp);
+
+	for (i = 0; i < nvals; i++)
+		if (!i1pro_patch_finite(&vals[i])) {
+			a1logd(p->log,2,"i1pro_conv2XYZ: nonfinite corrected reading\n");
+			return I1PRO_RD_READINCONS;
+		}
 
 	/* Don't return spectral if not asked for */
 	if (!m->spec_en) {

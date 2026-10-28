@@ -69,6 +69,11 @@
 #include "icoms.h"
 #include "sort.h"
 
+/* Return nz if the value is finite, including signed and zero values */
+static int munki_double_finite(double value) {
+	return value >= -DBL_MAX && value <= DBL_MAX;
+}
+
 /* Configuration */
 #undef USE_HIGH_GAIN_MODE /* [Und] Make use of high gain mode in emissive measurements */
 #define USE_THREAD		/* [Def] Need to use thread, or there are 1.5 second internal */
@@ -4296,6 +4301,18 @@ munki_code munki_read_patches_1(
 	return ev;
 }
 
+/* Return nz if the scaled readings are finite */
+static int munki_scaled_finite(munki *p, double **rows, int count) {
+	munkiimp *m = (munkiimp *)p->m;
+	int i, j;
+
+	for (i = 0; i < count; i++)
+		for (j = 0; j < m->nwav; j++)
+			if (!munki_double_finite(rows[i][j]))
+				return 0;
+	return 1;
+}
+
 /* Given a buffer full of raw USB values, process them into */ 
 /* completely processed spectral output patch readings. */
 munki_code munki_read_patches_2(
@@ -4603,6 +4620,10 @@ munki_code munki_read_patches_2(
 
 	/* Scale to the calibrated output values */
 	munki_scale_specrd(p, specrd, numpatches, specrd);
+	if (!munki_scaled_finite(p, specrd, numpatches)) {
+		a1logd(p->log,3,"munki_read_patches: nonfinite calibrated spectrum\n");
+		return MUNKI_RD_READINCONS;
+	}
 
 #ifdef PLOT_DEBUG
 	printf("Calibrated measuerment spectra:\n");
@@ -4669,6 +4690,10 @@ munki_code munki_read_patches_2a(
 
 	/* Scale to the calibrated output values */
 	munki_scale_specrd(p, specrd, numpatches, specrd);
+	if (!munki_scaled_finite(p, specrd, numpatches)) {
+		a1logd(p->log,3,"munki_read_patches: nonfinite calibrated spectrum\n");
+		return MUNKI_RD_READINCONS;
+	}
 
 #ifdef PLOT_DEBUG
 	printf("Calibrated measuerment spectra:\n");
@@ -8065,6 +8090,23 @@ static double opt_adj_weights[21] = {
 	9.2709981544886391e+122, 3.7958270103353899e-153, 7.1366083837501666e-154
 };
 
+/* Return nz if the spectral and XYZ values are finite */
+static int munki_patch_finite(const ipatch *v) {
+	int j;
+
+	if (v->sp.spec_n < 0 || v->sp.spec_n > XSPECT_MAX_BANDS
+	 || !munki_double_finite(v->sp.norm) || v->sp.norm <= 0.0)
+		return 0;
+	for (j = 0; j < v->sp.spec_n; j++)
+		if (!munki_double_finite(v->sp.spec[j]))
+			return 0;
+	if (v->XYZ_v)
+		for (j = 0; j < 3; j++)
+			if (!munki_double_finite(v->XYZ[j]))
+				return 0;
+	return 1;
+}
+
 /* Convert from spectral to XYZ, and transfer to the ipatch array */
 munki_code munki_conv2XYZ(
 	munki *p,
@@ -8115,6 +8157,11 @@ munki_code munki_conv2XYZ(
 				vals[i].sp.spec[k] = specrd[i][j] * sms;
 			}
 			vals[i].sp.norm = 1.0;
+			if (!munki_patch_finite(&vals[i])) {
+				a1logd(p->log,3,"munki_conv2XYZ: nonfinite spectrum\n");
+				conv->del(conv);
+				return MUNKI_RD_READINCONS;
+			}
 
 			/* Set the XYZ */
 			conv->convert(conv, vals[i].XYZ, &vals[i].sp);
@@ -8137,6 +8184,11 @@ munki_code munki_conv2XYZ(
 				vals[i].sp.spec[k] = 100.0 * specrd[i][j] * sms;
 			}
 			vals[i].sp.norm = 100.0;
+			if (!munki_patch_finite(&vals[i])) {
+				a1logd(p->log,3,"munki_conv2XYZ: nonfinite spectrum\n");
+				conv->del(conv);
+				return MUNKI_RD_READINCONS;
+			}
 
 			/* Set the XYZ */
 			conv->convert(conv, vals[i].XYZ, &vals[i].sp);
@@ -8153,6 +8205,12 @@ munki_code munki_conv2XYZ(
 			}
 		}
 
+		if (!munki_patch_finite(&vals[i])) {
+			a1logd(p->log,3,"munki_conv2XYZ: nonfinite converted reading\n");
+			conv->del(conv);
+			return MUNKI_RD_READINCONS;
+		}
+
 		a1logd(p->log,3,"munki_conv2XYZ returning XYZi[%d] %f %f %f\n",
 		              i, vals[i].XYZ[0], vals[i].XYZ[1], vals[i].XYZ[2]);
 	}
@@ -8165,6 +8223,12 @@ munki_code munki_conv2XYZ(
 	/* Apply custom filter compensation */
 	if (m->custfilt_en)
 		ipatch_convert_custom_filter(vals, nvals, &m->custfilt, clamp);
+
+	for (i = 0; i < nvals; i++)
+		if (!munki_patch_finite(&vals[i])) {
+			a1logd(p->log,3,"munki_conv2XYZ: nonfinite corrected reading\n");
+			return MUNKI_RD_READINCONS;
+		}
 
 	/* Don't return spectral if not asked for */
 	if (!m->spec_en) {
