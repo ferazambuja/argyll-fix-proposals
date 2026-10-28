@@ -1148,8 +1148,10 @@ instClamping clamp) {		/* NZ if clamp XYZ/Lab to be +ve */
 	}
 
 	/* And set it (ignored if not 15X1 and EXPL1211AVG)  */
-	if ((rv = set_average(p, nav, 0)) != inst_ok)
+	if ((rv = set_average(p, nav, 0)) != inst_ok) {
+		amutex_unlock(p->lock);
 		return rv;
+	}
 
 	/* Adjust timeout to account for averaging */
 	/* (Allow extra 1 sec fudge factor per average) */
@@ -1882,8 +1884,11 @@ char id[CALIDLEN]		/* Condition identifier (ie. white reference ID) */
 
 		/* Set to average 50 readings for calibration */
 		// !!!! NOTE :- this doesn't work because specbos_read_sample() overrides it !!!!!
-		if ((ev = set_average(p, 50, 1)) != inst_ok)
+		if ((ev = set_average(p, 50, 1)) != inst_ok) {
+			p->mode = cmode;
+			p->doing_cal = 0;
 			return ev;
+		}
 
 		if ((ev = specbos_read_sample(pp, "Transmission White", &val, 0)) != inst_ok) {
 			a1logd(p->log,1,"specbos_calibrate: Transmission white cal failed with 0x%x\n",ev);
@@ -1895,8 +1900,11 @@ char id[CALIDLEN]		/* Condition identifier (ie. white reference ID) */
 		p->trans_white = val.sp; /* Struct copy */
 
 		/* Restore average */
-		if ((ev = set_average(p, 1, 1)) != inst_ok)
+		if ((ev = set_average(p, 1, 1)) != inst_ok) {
+			p->mode = cmode;
+			p->doing_cal = 0;
 			return ev;
+		}
 
 		// ~~~~9999 check white quality
 		
