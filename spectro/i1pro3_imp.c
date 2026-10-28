@@ -1225,6 +1225,8 @@ i1pro3_code i1pro3_imp_calibrate(
 
 			if ((ev = i1pro3_wl_measure(p, wlraw, &s->wl_temp)) != I1PRO3_OK) {
 				a1logd(p->log,2,"i1pro3_wl_measure() failed\n");
+				free_dvector(wlraw, -1, m->nraw-1);
+				m->mmode = mmode;		/* Restore actual mode */
 				return ev;
 			}
 
@@ -1236,6 +1238,8 @@ i1pro3_code i1pro3_imp_calibrate(
 //			if ((ev = i1pro3_match_wl_meas(p, NULL, &s->wl_cal_raw_off, wlraw)) != I1PRO3_OK)
 			{
 				a1logd(p->log,2,"i1pro3_match_wl_meas() failed\n");
+				free_dvector(wlraw, -1, m->nraw-1);
+				m->mmode = mmode;		/* Restore actual mode */
 				return ev;
 			}
 			free_dvector(wlraw, -1, m->nraw-1);
@@ -1245,6 +1249,7 @@ i1pro3_code i1pro3_imp_calibrate(
 			if ((ev = i1pro3_compute_wav_filters(p, s->wl_cal_raw_off, s->wl_cal_wav_off, 1))
 				                                                           != I1PRO3_OK) {
 				a1logd(p->log,2,"i1pro3_compute_wav_filters() failed\n");
+				m->mmode = mmode;		/* Restore actual mode */
 				return ev;
 			}
 
@@ -1291,7 +1296,8 @@ i1pro3_code i1pro3_imp_calibrate(
 			a1logd(p->log,2,"\nDoing emis/trans black calibration\n");
 
 			if ((ev = i1pro3_adapt_emis_cal(p, &ctemp)) != I1PRO3_OK) {
-				a1logd(p->log,2,"i1pro3_refl_cal failed\n");
+				a1logd(p->log,2,"i1pro3_adapt_emis_cal failed\n");
+				m->mmode = mmode;		/* Restore actual mode */
 				return ev;
 			}
 
@@ -1337,7 +1343,7 @@ i1pro3_code i1pro3_imp_calibrate(
 
 				/* Do polarized reflectance calibration */
 				if ((ev = i1pro3_pol_refl_cal(p)) != I1PRO3_OK) {
-					a1logd(p->log,2,"i1pro3_refl_cal failed\n");
+					a1logd(p->log,2,"i1pro3_pol_refl_cal failed\n");
 					m->mmode = mmode;		/* Restore actual mode */
 					return ev;
 				}
@@ -1460,17 +1466,21 @@ i1pro3_code i1pro3_imp_calibrate(
 
 			a1logd(p->log,2,"\nDoing display integration time calibration\n");
 	
+			s->done_dintsel = 0;		/* Selection must be redone */
 			s->inttime = s->iinttime;			/* Start with default integration time */
 
 			/* returns raw, black subtracted, linearized */
 			ev = i1pro3_spot_simple_emis_raw_meas(p, &raw_sample, &nummeas, &inttime, 0.25, 0);
 
-			if (ev != I1PRO3_RD_SENSORSATURATED) {
+			if (ev != I1PRO3_OK) {
+				m->mmode = mmode;		/* Restore actual mode */
 				return ev;
 			} else if (ev == I1PRO3_OK) {
 
 				i1pro3_average_rawmmeas(p, psample, raw_sample, nummeas);
 				maxval = vect_max(psample, m->nraw);
+				if (maxval <= 0.0)		/* As in adaptive exposure selection */
+					maxval = 1.0;
 
 				a1logd(p->log,4," display int. calib. maxval %f\n",maxval);
 
@@ -11534,7 +11544,7 @@ i1pro3_code i1pro3_spot_simple_emis_raw_meas(
 	/* Check if sample is saturated */
 	if (i1pro3_multimeas_check_sat(p, NULL, raw_sample, nummeas)) {
 		a1logd(p->log,1," sample is saturated\n");
-		i1pro3_free_raw(p, i1p3mm_rf_wh, raw_sample, nummeas);
+		i1pro3_free_raw(p, i1p3mm_em, raw_sample, nummeas);
 		return I1PRO3_RD_SENSORSATURATED;
 	}
 
