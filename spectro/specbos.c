@@ -9,6 +9,7 @@
  *
  * Copyright 1996 - 2014, Graeme W. Gill
  * All rights reserved.
+ * Proposed changes: Fernando Voltolini de Azambuja, 27 October 2026.
  *
  * This material is licenced under the GNU GENERAL PUBLIC LICENSE Version 2 or later :-
  * see the License2.txt file for licencing details.
@@ -1569,9 +1570,11 @@ instClamping clamp) {		/* NZ if clamp XYZ/Lab to be +ve */
 	}
 
 	if (p->model == 2501) {
-		if((rv = specbos_command(p, "*contr:buttonled 1\r", buf, MAX_MES_SIZE, 1.0)) != inst_ok) {
+		amutex_lock(p->lock);
+		rv = specbos_command(p, "*contr:buttonled 1\r", buf, MAX_MES_SIZE, 1.0);
+		amutex_unlock(p->lock);
+		if (rv != inst_ok)
 			return rv;
-		}
 	}
 	
 
