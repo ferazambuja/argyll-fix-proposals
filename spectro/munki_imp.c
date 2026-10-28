@@ -8,7 +8,7 @@
  * Copyright 2006 - 2014, Graeme W. Gill
  * All rights reserved.
  * Proposed changes: Fernando Voltolini de Azambuja, 2 October 2026.
- * Further proposed changes: 27 October 2026.
+ * Further proposed changes: 27 and 28 October 2026.
  *
  * This material is licenced under the GNU GENERAL PUBLIC LICENSE Version 2 or later :-
  * see the License2.txt file for licencing details.
@@ -1106,6 +1106,10 @@ munki_code munki_imp_calibrate(
 		/* inst_calc_man_trans_white, inst_calc_disp_white or inst_calc_proj_white */
 		/* sequenced in that order, and in the appropriate condition for it. */
 	
+		/* A white calibration retry needs valid dark data for exposure selection. */
+		if (s->reflective && !s->dark_valid && (*calt & inst_calt_ref_white))
+			*calt |= inst_calt_ref_dark;
+
 		/* Fixed int. time black calibration: */
 		/* Reflective uses on the fly black, even for adaptive. */
 		/* Emiss and trans can use single black ref only for non-adaptive */
