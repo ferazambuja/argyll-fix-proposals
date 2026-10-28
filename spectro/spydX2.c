@@ -9,6 +9,7 @@
  *
  * Copyright 2006 - 2025, Graeme W. Gill
  * All rights reserved.
+ * Proposed changes: Fernando Voltolini de Azambuja, 27 October 2026.
  *
  * (Based on spydX.c)
  *
@@ -1419,6 +1420,21 @@ int recreate				/* nz to re-check for new ccmx & ccss files */
 
 /* Given a display type entry, setup for that type */
 static inst_code set_disp_type(spydX2 *p, inst_disptypesel *dentry) {
+	int usehl = 0;
+
+	/* The measurement path depends on the native index, so */
+	/* decide it every time one is selected. */
+	if ((dentry->flags & (inst_dtflags_mtx | inst_dtflags_ccmx)) != 0) {
+		int ix = dentry->ix;
+
+		/* See if we could/should use high level measure XYZ for Spyder 2024 */
+		if ( p->is2024
+		 && !p->forcell
+		 && ix < p->mxdnp1
+		 && ((1 << ix) & p->dnomask) != 0) {
+			usehl = 1;
+		}
+	}
 
 	/* If an inbuilt matrix hasn't been read from the instrument, */
 	/* read it now. */
@@ -1429,15 +1445,7 @@ static inst_code set_disp_type(spydX2 *p, inst_disptypesel *dentry) {
 
 		p->ix = ix;
 		p->cinfo[ix].ix = ix;
-
-		/* See if we could/should use high level measure XYZ for Spyder 2024 */
-		p->usehl = 0;
-		if ( p->is2024
-		 && !p->forcell
-		 && ix < p->mxdnp1
-   		 && ((1 << ix) & p->dnomask) != 0) {	
-			p->usehl = 1;
-		}
+		p->usehl = usehl;
 
 		if (!p->is2024 || !p->usehl) {
 			rv = spydX2_getCalibration(p);
@@ -1473,6 +1481,7 @@ static inst_code set_disp_type(spydX2 *p, inst_disptypesel *dentry) {
 	}
 
 	p->ix = dentry->ix;				/* Native index */
+	p->usehl = usehl;				/* and its measurement path */
 
 	if (p->log->debug >= 4) {
 		a1logd(p->log,4,"ccmat           = %f %f %f\n",
