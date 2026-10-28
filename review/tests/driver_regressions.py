@@ -23,6 +23,7 @@ ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
 BEFORE = "e924058ee3b23e49be5053e0ab2bc73e727354c4"
 REVIEWED = "a3a12922613b59fcae56ba39e1d496b6ab8fa76c"
+MAINTAINER_REVIEWED = "7ab0f97927f8347950af04d1c63ffd0720f7b3bd"
 CC = shlex.split(os.environ.get("CC", "cc"))
 
 
@@ -488,6 +489,50 @@ def integration_selection(tmp):
     print("PASS i1pro3 integration selection: reviewed source 11 failures; current 16 scenarios, 0 failures")
 
 
+def munki_recovery(tmp):
+    for before in (True, False):
+        text = (subprocess.check_output(
+            ["git", "show", MAINTAINER_REVIEWED + ":spectro/munki_imp.c"], cwd=ROOT, text=True)
+            if before else source("spectro/munki_imp.c"))
+        constants = "".join(_define(text, name) for name in (
+            "DCALTOUT", "WCALTOUT", "RDEAD_TIME", "ADARKINT_MAX"))
+        funcs = _function(text, "munki_imp_get_n_a_cals") + _function(text, "munki_imp_calibrate")
+        measure = _function(text, "munki_imp_measure")
+        measure = measure[:measure.index("\tif (nvals <= 0")]
+        funcs += measure + "\t/* TEST ONLY: stop after the actual readiness gate. */\nreturn MUNKI_OK;\n}\n"
+        flags = ["-DSALONEINSTLIB", "-DUNIX", "-Wno-array-parameter", "-Wno-unused-value"]
+        for folder in ("h", "numlib", "icc", "rspl", "cgats", "xicc", "spectro", "gamut", "plot"):
+            flags += ["-I", str(ROOT / folder)]
+        result = run(tmp, "munki-recovery-" + str(before),
+                     (HERE / "munki_calibration_probe.c").read_text(),
+                     {"constants.inc": constants, "functions.inc": funcs,
+                      "sa_config.h": source("h/aconfig.h")}, flags)
+        failed = expect(result, 3 if before else 0)
+        if before:
+            assert set(failed) == {"invalid_white", "retry_failed_dark", "retry_dark_failure"}, failed
+    print("PASS ColorMunki calibration: reviewed source 3 failures; current 7 scenarios, 0 failures")
+
+
+def finite_producers(tmp):
+    munki = source("spectro/munki_imp.c")
+    spectral = source("xicc/xspect.c")
+    funcs = "".join(_function(spectral, name) for name in (
+        "getval_raw_xspec_poly3_ex", "getval_raw_xspec_lin_ex",
+        "getval_raw_xspec", "getval_xspec"))
+    funcs += _function(source("spectro/inst.c"), "ipatch_convert_custom_filter")
+    funcs += "".join(_function(munki, name) for name in (
+        "munki_double_finite", "munki_patch_finite", "munki_scaled_finite",
+        "munki_compute_white_cal", "munki_scale_specrd"))
+    # Unchanged upstream white-factor loops compare int with unsigned nwav1.
+    flags = ["-DSALONEINSTLIB", "-DUNIX", "-Wno-sign-compare"]
+    for folder in ("h", "numlib", "icc", "rspl", "cgats", "xicc", "spectro", "gamut", "plot"):
+        flags += ["-I", str(ROOT / folder)]
+    result = run(tmp, "finite-producers", (HERE / "finite_producers_probe.c").read_text(),
+                 {"functions.inc": funcs, "sa_config.h": source("h/aconfig.h")}, flags)
+    expect(result, 0)
+    print("PASS actual finite producers: 5 constructed-input cases, 0 failures; no CIE or device execution")
+
+
 def main():
     with tempfile.TemporaryDirectory(prefix="argyll-driver-regression-") as tmp:
         folder = Path(tmp)
@@ -500,6 +545,8 @@ def main():
         flash(folder)
         calibration_cleanup(folder)
         integration_selection(folder)
+        munki_recovery(folder)
+        finite_producers(folder)
     print("PASS: temporary sources and compiler products removed; no instrument access")
 
 

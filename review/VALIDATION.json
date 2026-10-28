@@ -1,7 +1,7 @@
 {
-  "date": "2026-10-27",
+  "date": "2026-10-28",
   "timezone": "America/New_York",
-  "source_commit": "70c6f9b38d74d9697020a594b260e7b42c38fa74",
+  "source_commit": "834f8d43cc4002849526103567a2235ade373c51",
   "official_base": "2d0acfa9a1d1e480b6ff0043fd57c83eca951dac",
   "regression_predecessor": "e924058ee3b23e49be5053e0ab2bc73e727354c4",
   "platform": "macOS arm64",
@@ -12,7 +12,7 @@
     "spectro/specbos.c": "ba9a6a4199a6a9b51969490d9eb0bec185be80bde5714ca41fead5a970c3679d",
     "spectro/i1pro_imp.c": "8049c49cc58dcc09478b4487517c3aba0c10b3de928df1880123fb69c74cf0d7",
     "spectro/i1pro3_imp.c": "1b3f7485e5082a6eaa045b8ecd87d5f3d7f5f385a79f21d7b080fa69e623e8e7",
-    "spectro/munki_imp.c": "1c13cf7f6f44ce5691448f5ed76995b2bb3caca0cf935f3da3a144a19fbba150"
+    "spectro/munki_imp.c": "c97aa3dda252eaa086bd8a63a9669bba639a3e156f725656b8717ca29bd6ab39"
   },
   "ordinary_build": {
     "command": "jam -q -fJambase -j3",
@@ -28,7 +28,9 @@
       "illumread"
     ],
     "tools_executed": false,
-    "source_changes_for_build": false
+    "source_changes_for_build": false,
+    "source_commit": "70c6f9b38d74d9697020a594b260e7b42c38fa74",
+    "repeated_after_28_october_retry_followup": false
   },
   "complete_changed_driver_objects": {
     "dialect": "gnu89",
@@ -36,9 +38,16 @@
     "return_types": "errors",
     "result": "pass",
     "freshly_rechecked": [
-      "spectro/i1pro3_imp.c"
+      "spectro/munki_imp.c"
     ],
-    "unchanged_file_evidence_reused_from": "e46f88eaa9b41a1314e16a23f091f7aa170558fe"
+    "unchanged_file_evidence_reused_from": "70c6f9b38d74d9697020a594b260e7b42c38fa74",
+    "fresh_check_defines": [
+      "UNIX",
+      "ENABLE_USB",
+      "ENABLE_SERIAL",
+      "ENABLE_FAST_SERIAL"
+    ],
+    "fresh_check_diagnostics": 0
   },
   "regression_results": {
     "spyder_selection": {
@@ -108,6 +117,34 @@
       "reviewed_source_failing_scenarios": 11,
       "current_scenarios": 16,
       "current_failures": 0
+    },
+    "munki_complete_calibration": {
+      "reviewed_source": "7ab0f97927f8347950af04d1c63ffd0720f7b3bd",
+      "reviewed_source_failing_scenarios": 3,
+      "current_scenarios": 7,
+      "current_failures": 0,
+      "actual_functions": [
+        "munki_imp_calibrate",
+        "munki_imp_get_n_a_cals"
+      ],
+      "measurement_scope": "actual readiness prefix only",
+      "real_headers": true,
+      "acquisition": "scripted; no transport or terminal UI"
+    },
+    "actual_finite_producers": {
+      "constructed_input_cases": 5,
+      "current_failures": 0,
+      "real_headers": true,
+      "actual_arithmetic": [
+        "spectral interpolation",
+        "custom-filter division",
+        "ColorMunki transmission white factors",
+        "ColorMunki spectral scaling"
+      ],
+      "file_loading": false,
+      "cie_integration": false,
+      "complete_calibration_reachability": false,
+      "warning_suppression": "unchanged upstream signed/unsigned white-factor loop comparisons"
     }
   },
   "combined_official_source_apply_and_reverse": "pass",
@@ -120,7 +157,9 @@
     "Reduced probe structs and numerical stand-ins are not production ABI or CIE validation.",
     "Dark tests execute selected prefixes; scan-branch ownership also relies on source inspection.",
     "Other calibration repairs and allocation-error propagation are outside this selected export.",
-    "The full integration-selection probe uses real headers with the unchanged upstream array-parameter bound warning disabled; acquisition and allocation are inert substitutes."
+    "The full integration-selection probe uses real headers with the unchanged upstream array-parameter bound warning disabled; acquisition and allocation are inert substitutes.",
+    "The 28 October ColorMunki retry follow-up has a fresh complete-object check; the full ordinary build is retained evidence from production commit 70c6f9b.",
+    "Constructed zero filter/white inputs reproduce actual helper arithmetic only; no complete file-to-reading or instrument trigger is claimed."
   ],
   "challenge_predecessor": "a3a12922613b59fcae56ba39e1d496b6ab8fa76c",
   "standalone_finite_export": {

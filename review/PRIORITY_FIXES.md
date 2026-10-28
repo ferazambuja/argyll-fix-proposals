@@ -1,6 +1,6 @@
 # Four driver repair groups for ArgyllCMS 3.5.0
 
-Prepared 27 October 2026. These are selected repairs to Argyll's own drivers. They add no device command, acquisition mode, calibration equation, application policy or build dependency. The [original two-fix note](DRIVER_FIXES.md) and [Specbos 2501 note](SPECBOS_2501.md) remain available with their original evidence scope.
+Prepared 27 October 2026; updated 28 October after maintainer feedback. These are selected repairs to Argyll's own drivers. They use existing protocol commands, acquisition modes, calibration equations and build dependencies. The ColorMunki follow-up repeats the existing dark capture when an explicit reflective-white request has invalid dark data. The [original two-fix note](DRIVER_FIXES.md) and [Specbos 2501 note](SPECBOS_2501.md) retain their original evidence scope.
 
 | Group | Failure | Source-only commit |
 |---|---|---|
@@ -41,6 +41,16 @@ The same principle applies to live white data and factors. This proposal clears 
 
 After ColorMunki's inner reflective dark capture succeeds, it now records `dark_valid`, pending-calibration state, date, integration time and gain using the same assignments as its initial-dark completion. If that capture fails, its data remain invalid. If a later white callback fails, the completed dark data retain matching metadata while white data stay invalid.
 
+### ColorMunki tail and calibration-retry follow-up
+
+Reflective measurements acquire and validate their own dark data before processing the sample. This limits the case for treating the final calibration dark buffer as a reused measurement reference. It does not settle calibration retries: `munki_whitemeasure()` subtracts `s->dark_data` while choosing exposure, before the final dark capture. `munki_dark_measure_2()` can overwrite that buffer and then reject its consistency or level. The standard `inst_handle_calibrate()` retry retains the remaining calibration mask, which may contain only reflective white after the initial dark bit has been cleared.
+
+The [28 October source follow-up](https://github.com/ferazambuja/argyll-fix-proposals/commit/834f8d43cc4002849526103567a2235ade373c51) adds the reflective-dark bit when reflective white is requested with `dark_valid == 0`. The existing initial-dark branch then captures and validates it before white exposure selection. A failed prerequisite capture returns its existing error and leaves both requests pending. A valid dark reference takes the original path. No new protocol command or calibration equation is introduced.
+
+The tail's success flag has a separate source justification: a saturated white trial clears `dark_valid`; without restoring it after the successful final dark, a recovered white calibration can finish with white valid and dark invalid, and the next measurement requests calibration again. The completion metadata are not universally inert either: `ddate` controls expiry, `want_dcalib` affects requested calibration, and `dark_int_time` participates in persisted-calibration matching. Some assignments are redundant when the initial dark has already completed in the same call. Their necessity in every flow is not established by copying the initial-dark pattern; the tail remains a proposal for maintainer judgment.
+
+[`munki_calibration_probe.c`](tests/munki_calibration_probe.c) executes the complete actual calibration and need-assessment functions using real headers, plus the actual measurement-readiness prefix. Seven scenarios cover a valid reference, an initially invalid white-only request, retry after an overwritten dark failure, a failed prerequisite on retry, saturation recovery, a later white-stage failure/retry, and explicit white-only completion metadata. Acquisition and white-factor helpers are scripted; unexpected paths abort. The reviewed `7ab0f97` source fails the three invalid-reference/retry scenarios; the follow-up passes all seven. The test repeats the remaining mask between calls, matching the source-traced application helper; it does not execute that helper's terminal UI or real transport.
+
 The tests execute selected actual acquisition prefixes with a helper that overwrites a live buffer before returning success or failure. Twenty i1Pro and sixteen ColorMunki cases cover initial validity and both outcomes. Each case now checks the specific validity flag owning the written buffer and requires the other flag to remain unchanged. Five temporary wrong-flag/both-flags mutations were rejected. White-dispatch prefixes run with overwrite-before-error callbacks, including both i1Pro3 reflective paths and transmission. A separate four-scenario ColorMunki reflective-white tail checks completion metadata and failure after each covered capture/conversion callback.
 
 All current cases pass. The predecessor has 92 failures in the white-dispatch probe, ten in the selected i1Pro dark prefixes, eight in the ColorMunki prefixes and five in the inner-dark completion probe. These counts describe assertions in bounded probes, not instrument measurements. The adaptive-scan ownership and gain-switch invalidations also rely on source inspection; their full acquisition paths are not executed here. White-factor return-value validation, high-resolution coefficient transactions and other calibration changes remain outside this selected proposal.
@@ -55,7 +65,11 @@ Sixteen source-bound exit cases check every per-mode early return in current and
 
 ## Nonfinite spectral/XYZ results
 
-Finite operands can overflow during calibration multiplication, reflectance percentage scaling, XYZ integration or correction. The affected original callers can still return success. Checking an input calibration factor alone does not establish that its product is finite.
+These are defensive output guards, not a repair of a confirmed instrument failure. The original regression cases supply extreme finite values, nonfinite input, and deliberately poisoned integration/correction results. They prove refusal at the selected boundaries, not that ordinary instrument readings reach those extremes. Checking an input calibration factor alone also does not establish that its product is finite.
+
+[`finite_producers_probe.c`](tests/finite_producers_probe.c) now executes actual producer arithmetic rather than only injected correction results. With a constructed all-zero four-band filter of positive normalization, actual interpolation returns zero and `ipatch_convert_custom_filter()` divides a finite emission spectrum by it, producing infinity and NaN. A single zero band need not cause this at other sample wavelengths; the interpolated divisor is what matters. Positive-filter and unaligned-zero-band controls remain finite. `spotread`'s filter loading and driver setters have no positive-value check in the inspected source, but file parsing and a complete tool run are not executed by this probe. CIE integration is deliberately not called, so this is spectral-result evidence only.
+
+The same probe passes an all-zero transmission white to actual standard-resolution `munki_compute_white_cal()`. The relative 0.4% floor depends on the average: `0/0 < 0.004` is false, then `1/0` produces infinite factors while the helper returns success. Actual calibration scaling produces nonfinite samples, which the output guard refuses. A positive-white control produces the expected finite factors. This demonstrates the helper's behavior for supplied inputs, not that the complete acquisition/calibration path admits such a white. The analogous i1Pro expression is source-traced; i1Pro3 separately rejects a low average. The five producer/control cases all pass. Real headers are used; only the unchanged white-factor loop's signed/unsigned comparison warning is suppressed in this probe.
 
 The change checks:
 
@@ -73,7 +87,7 @@ The actual i1Pro/i1Pro2 and ColorMunki scalers plus their callers' publication t
 
 ## Ordinary Argyll build and platform scope
 
-The exact combined production source is commit `70c6f9b38d74d9697020a594b260e7b42c38fa74`. The [validation receipt](VALIDATION.json) binds all six modified source/header files by SHA-256.
+The current combined production source is commit `834f8d43cc4002849526103567a2235ade373c51`. The [validation receipt](VALIDATION.json) binds all six modified source/header files by SHA-256. The full ordinary build below belongs to `70c6f9b38d74d9697020a594b260e7b42c38fa74`; the later source change is limited to ColorMunki's retry prerequisite and its dated notice.
 
 On macOS arm64 with Apple Clang 21.0.0, the ordinary default build passed:
 
@@ -83,9 +97,9 @@ jam -q -fJambase -j3
 
 The build used the unchanged `Jambase`, `Jamtop`, `Jamfile` and subdirectory build files. It linked ordinary `spotread`, `chartread`, `dispread`, `dispcal`, `ccxxmake` and `illumread` as arm64 executables, together with the default build's other targets. No source substitutions, application workers or custom build recipe were used. The build emitted 63 warning lines in unchanged upstream files, including deprecated macOS interfaces, upstream pragma messages and linker/configuration warnings. None was located in the five changed C driver files.
 
-Those five drivers also separately compiled as complete objects using `-std=gnu89`, `-Werror=implicit-function-declaration` and `-Werror=return-type`, with ordinary project headers. The corrected i1Pro3 object was recompiled; the other four source files are byte-identical to the earlier checked files and reuse that object-check evidence. The ordinary Jam build was freshly repeated on the complete combined source. This supports the changed code's dialect/interface fit; it is not strict-C89 qualification of the complete upstream tree or a test with an old Visual C++ compiler.
+Those five drivers also separately compiled as complete objects using `-std=gnu89`, `-Werror=implicit-function-declaration` and `-Werror=return-type`, with ordinary project headers. On 28 October the complete changed ColorMunki object was freshly compiled with the ordinary USB/serial feature definitions and no diagnostics; the other four C files are byte-identical to `70c6f9b` and reuse its object checks. The full ordinary Jam build has not been repeated after this small follow-up. This supports the changed code's dialect/interface fit; it is not strict-C89 qualification of the complete upstream tree or a test with an old Visual C++ compiler.
 
-From a Git clone containing the published predecessor, reproduce the focused checks with Python 3 and a C99 compiler, then the POSIX-thread LED check:
+From a full Git clone containing predecessors `e924058`, `a3a1292` and `7ab0f97`, reproduce the focused checks with Python 3 and a C99 compiler (`cc`, or set `CC`), then the POSIX-thread LED check:
 
 ```sh
 python3 -B review/tests/driver_regressions.py
