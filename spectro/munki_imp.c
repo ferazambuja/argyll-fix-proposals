@@ -8,6 +8,7 @@
  * Copyright 2006 - 2014, Graeme W. Gill
  * All rights reserved.
  * Proposed changes: Fernando Voltolini de Azambuja, 2 October 2026.
+ * Further proposed changes: 27 October 2026.
  *
  * This material is licenced under the GNU GENERAL PUBLIC LICENSE Version 2 or later :-
  * see the License2.txt file for licencing details.
@@ -1121,6 +1122,7 @@ munki_code munki_imp_calibrate(
 			nummeas = munki_comp_nummeas(p, s->dcaltime, s->inttime);
 	
 			a1logd(p->log,3,"\nDoing initial black calibration with dcaltime %f, int_time %f, nummeas %d, gainmode %d\n", s->dcaltime, s->inttime, nummeas, s->gainmode);
+			s->dark_valid = 0;		/* Dark cal. data will be overwritten */
 			stm = msec_time();
 			if ((ev = munki_dark_measure(p, s->dark_data, nummeas, &s->inttime, s->gainmode))
 		                                                                         != MUNKI_OK) {
@@ -1208,6 +1210,7 @@ if (ss->dark_int_time2 != s->dark_int_time2
 			nummeas = munki_comp_nummeas(p, s->dcaltime, s->inttime);
 	
 			a1logd(p->log,3,"\nDoing emissive (flash) black calibration with dcaltime %f, int_time %f, nummeas %d, gainmode %d\n", s->dcaltime, s->inttime, nummeas, s->gainmode);
+			s->dark_valid = 0;		/* Dark cal. data will be overwritten */
 			stm = msec_time();
 			if ((ev = munki_dark_measure(p, s->dark_data, nummeas, &s->inttime, s->gainmode))
 		                                                                         != MUNKI_OK) {
@@ -1257,6 +1260,7 @@ if (ss->dark_int_time2 != s->dark_int_time2
 			/* The black reference is probably temperature dependent, but */
 			/* there's not much we can do about this. */
 	
+			s->idark_valid = 0;		/* Dark cal. data will be overwritten */
 			s->idark_int_time[0] = m->min_int_time;
 			nummeas = munki_comp_nummeas(p, s->dcaltime, s->idark_int_time[0]);
 			a1logd(p->log,3,"\nDoing adaptive interpolated black calibration, dcaltime %f, idark_int_time[0] %f, nummeas %d, gainmode %d\n", s->dcaltime, s->idark_int_time[0], nummeas, 0);
@@ -1506,6 +1510,7 @@ if (ss->idark_int_time[j] != s->idark_int_time[j])
 	
 			a1logd(p->log,3,"\nDoing initial white calibration with current inttime %f, gainmode %d\n",
 			                                                   s->inttime, s->gainmode);
+			s->cal_valid = 0;		/* White calibration data will be overwritten */
 			a1logd(p->log,3,"ulimit %f, llimit %f\n",ulimit,llimit);
 			a1logd(p->log,3,"fulimit %f, fllimit %f\n",fulimit,fllimit);
 			if (s->reflective) {
@@ -1595,11 +1600,17 @@ if (ss->idark_int_time[j] != s->idark_int_time[j])
 				nummeas = munki_comp_nummeas(p, s->dcaltime, s->inttime);
 	
 				a1logd(p->log,3,"Doing another reflective black calibration with dcaltime %f, int_time %f, nummeas %d, gainmode %d\n", s->dcaltime, s->inttime, nummeas, s->gainmode);
+				s->dark_valid = 0;		/* Dark cal. data will be overwritten */
 				if ((ev = munki_dark_measure(p, s->dark_data, nummeas, &s->inttime, s->gainmode))
 			                                                                         != MUNKI_OK) {
 					m->mmode = mmode;           /* Restore actual mode */
 					return ev;
 				}
+				s->dark_valid = 1;
+				s->want_dcalib = 0;
+				s->ddate = cdate;
+				s->dark_int_time = s->inttime;
+				s->dark_gain_mode = s->gainmode;
 	
 				/* Take a reflective white reference measurement, */
 				/* subtracts black and decompose into base + LED temperature components, */

@@ -12,6 +12,7 @@
  * Copyright 2006 - 2014 Graeme W. Gill
  * All rights reserved.
  * Proposed changes: Fernando Voltolini de Azambuja, 2 October 2026.
+ * Further proposed changes: 27 October 2026.
  *
  * This material is licenced under the GNU GENERAL PUBLIC LICENSE Version 2 or later :-
  * see the License2.txt file for licencing details.
@@ -1822,6 +1823,7 @@ i1pro_code i1pro_imp_calibrate(
 			nummeas = i1pro_comp_nummeas(p, s->dcaltime, s->inttime);
 	
 			a1logd(p->log,2,"\nDoing initial black calibration with dcaltime %f, int_time %f, nummeas %d, gainmode %d\n", s->dcaltime, s->inttime, nummeas, s->gainmode);
+			s->dark_valid = 0;		/* Dark cal. data will be overwritten */
 			stm = msec_time();
 			if ((ev = i1pro_dark_measure(p, s->dark_data,
 				                               nummeas, &s->inttime, s->gainmode)) != I1PRO_OK) {
@@ -1920,6 +1922,7 @@ i1pro_code i1pro_imp_calibrate(
 			nummeas = i1pro_comp_nummeas(p, s->dcaltime, s->inttime);
 	
 			a1logd(p->log,2,"\nDoing emissive (flash) black calibration with dcaltime %f, int_time %f, nummeas %d, gainmode %d\n", s->dcaltime, s->inttime, nummeas, s->gainmode);
+			s->dark_valid = 0;		/* Dark cal. data will be overwritten */
 			stm = msec_time();
 			if ((ev = i1pro_dark_measure(p, s->dark_data,
 				                                 nummeas, &s->inttime, s->gainmode)) != I1PRO_OK) {
@@ -1980,6 +1983,7 @@ i1pro_code i1pro_imp_calibrate(
 	
 			nummeas = i1pro_comp_nummeas(p, s->dcaltime, s->idark_int_time[0]);
 			a1logd(p->log,2,"\nDoing adaptive interpolated black calibration, dcaltime %f, idark_int_time[0] %f, nummeas %d, gainmode %d\n", s->dcaltime, s->idark_int_time[0], nummeas, 0);
+			s->idark_valid = 0;		/* Dark cal. data will be overwritten */
 			if ((ev = i1pro_dark_measure(p, s->idark_data[0],
 				                          nummeas, &s->idark_int_time[0], 0)) != I1PRO_OK) {
 				m->mmode = mmode;			/* Restore actual mode */
@@ -2146,6 +2150,7 @@ i1pro_code i1pro_imp_calibrate(
 			/* but we don't know what gain mode will be used, so measure both, */
 			/* and choose the appropriate one on the fly. */
 	
+			s->idark_valid = 0;		/* Dark cal. data will be overwritten */
 			s->idark_int_time[0] = s->inttime;
 			nummeas = i1pro_comp_nummeas(p, s->dcaltime, s->idark_int_time[0]);
 			a1logd(p->log,2,"\nDoing adaptive scan black calibration, dcaltime %f, idark_int_time[0] %f, nummeas %d, gainmode %d\n", s->dcaltime, s->idark_int_time[0], nummeas, s->gainmode);
@@ -2228,6 +2233,7 @@ i1pro_code i1pro_imp_calibrate(
 	
 			a1logd(p->log,2,"\nDoing initial white calibration with current inttime %f, gainmode %d\n",
 			                                                               s->inttime, s->gainmode);
+			s->cal_valid = 0;		/* White calibration data will be overwritten */
 			nummeas = i1pro_comp_nummeas(p, s->wcaltime, s->inttime);
 			ev = i1pro_whitemeasure(p, s->cal_factor[0], s->cal_factor[1], s->white_data, &scale, nummeas,
 			           &s->inttime, s->gainmode, s->scan ? 1.0 : s->targoscale, 0);
@@ -2313,6 +2319,7 @@ i1pro_code i1pro_imp_calibrate(
 					if ((*calc & inst_calc_cond_mask) == inst_calc_man_ref_white) {
 						nummeas = i1pro_comp_nummeas(p, s->dcaltime, s->inttime);
 						a1logd(p->log,2,"Doing final black calibration with dcaltime %f, opt inttime %f, nummeas %d, gainmode %d\n", s->dcaltime, s->inttime, nummeas, s->gainmode);
+						s->dark_valid = 0;		/* Dark cal. data will be overwritten */
 						if ((ev = i1pro_dark_measure(p, s->dark_data,
 								                   nummeas, &s->inttime, s->gainmode)) != I1PRO_OK) {
 							m->mmode = mmode;			/* Restore actual mode */
@@ -2363,6 +2370,7 @@ i1pro_code i1pro_imp_calibrate(
 					}
 					a1logd(p->log,3,"Switching to low gain mode\n");
 					s->gainmode = 0;
+					s->dark_valid = 0;		/* Dark cal. data is for the other gain mode */
 					/* Measure white again with low gain */
 					nummeas = i1pro_comp_nummeas(p, s->wcaltime, s->inttime);
 					if ((ev = i1pro_whitemeasure(p, s->cal_factor[0], s->cal_factor[1], s->white_data,
@@ -2374,6 +2382,7 @@ i1pro_code i1pro_imp_calibrate(
 #ifdef USE_HIGH_GAIN_MODE
 					a1logd(p->log,3,"Scan signal is so low we're switching to high gain mode\n");
 					s->gainmode = 1;
+					s->dark_valid = 0;		/* Dark cal. data is for the other gain mode */
 					/* Measure white again with high gain */
 					nummeas = i1pro_comp_nummeas(p, s->wcaltime, s->inttime);
 					if ((ev = i1pro_whitemeasure(p, s->cal_factor[0], s->cal_factor[1], s->white_data,
@@ -2393,6 +2402,7 @@ i1pro_code i1pro_imp_calibrate(
 				if ((*calc & inst_calc_cond_mask) == inst_calc_man_ref_white) {
 					nummeas = i1pro_comp_nummeas(p, s->dcaltime, s->inttime);
 					a1logd(p->log,2,"Doing final black calibration with dcaltime %f, opt inttime %f, nummeas %d, gainmode %d\n", s->dcaltime, s->inttime, nummeas, s->gainmode);
+					s->dark_valid = 0;		/* Dark cal. data will be overwritten */
 					if ((ev = i1pro_dark_measure(p, s->dark_data,
 						              nummeas, &s->inttime, s->gainmode)) != I1PRO_OK) {
 						m->mmode = mmode;			/* Restore actual mode */

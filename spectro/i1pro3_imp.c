@@ -12,6 +12,7 @@
  * Copyright 2006 - 2024 Graeme W. Gill
  * All rights reserved.
  * Proposed changes: Fernando Voltolini de Azambuja, 2 October 2026.
+ * Further proposed changes: 27 October 2026.
  *
  * This material is licenced under the GNU GENERAL PUBLIC LICENSE Version 2 or later :-
  * see the License2.txt file for licencing details.
@@ -1323,6 +1324,7 @@ i1pro3_code i1pro3_imp_calibrate(
 		 && ((*calc & inst_calc_cond_mask) == inst_calc_man_ref_white && s->reflective)) {
 	
 			a1logd(p->log,2,"\nDoing initial reflective white calibration\n");
+			s->cal_valid = 0;		/* White calibration data will be overwritten */
 
 			if (m->filt == inst_opt_filter_pol) {
 
@@ -1331,6 +1333,7 @@ i1pro3_code i1pro3_imp_calibrate(
 				/* Do polarized reflectance calibration */
 				if ((ev = i1pro3_pol_refl_cal(p)) != I1PRO3_OK) {
 					a1logd(p->log,2,"i1pro3_refl_cal failed\n");
+					m->mmode = mmode;		/* Restore actual mode */
 					return ev;
 				}
 
@@ -1338,6 +1341,7 @@ i1pro3_code i1pro3_imp_calibrate(
 				/* Do reflectance calibration */
 				if ((ev = i1pro3_refl_cal(p)) != I1PRO3_OK) {
 					a1logd(p->log,2,"i1pro3_refl_cal failed\n");
+					m->mmode = mmode;		/* Restore actual mode */
 					return ev;
 				}
 			}
@@ -1398,6 +1402,7 @@ i1pro3_code i1pro3_imp_calibrate(
 			int i, j, k;
 	
 			a1logd(p->log,2,"\nDoing transmission white calibration\n");
+			s->cal_valid = 0;		/* White calibration data will be overwritten */
 
 			if ((s->emiss || s->trans) && s->scan)
 				s->inttime = s->iinttime;		/* Start with default integration time */
@@ -1410,6 +1415,7 @@ i1pro3_code i1pro3_imp_calibrate(
 			}
 			if (ev != I1PRO3_OK) {
 				a1logd(p->log,2,"i1pro3_trans_cal failed\n");
+				m->mmode = mmode;		/* Restore actual mode */
 				return ev;
 			}
 			s->cal_valid = 1;
