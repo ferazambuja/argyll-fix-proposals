@@ -1,0 +1,108 @@
+{
+  "date": "2026-10-27",
+  "timezone": "America/New_York",
+  "source_commit": "e46f88eaa9b41a1314e16a23f091f7aa170558fe",
+  "official_base": "2d0acfa9a1d1e480b6ff0043fd57c83eca951dac",
+  "regression_predecessor": "e924058ee3b23e49be5053e0ab2bc73e727354c4",
+  "platform": "macOS arm64",
+  "compiler": "Apple Clang 21.0.0",
+  "source_sha256": {
+    "spectro/spydX2.h": "e0b1484d87f13751e124c0d80b12d7fcf74f0d04199cd21691ad7faacbdebd43",
+    "spectro/spydX2.c": "e820a551483c2c94cb296fedea14abca8696f58a2aa8e653c827129894949851",
+    "spectro/specbos.c": "ba9a6a4199a6a9b51969490d9eb0bec185be80bde5714ca41fead5a970c3679d",
+    "spectro/i1pro_imp.c": "8049c49cc58dcc09478b4487517c3aba0c10b3de928df1880123fb69c74cf0d7",
+    "spectro/i1pro3_imp.c": "34745c734427cfeb8b16e609c185057396e2bf32af2182b917c73279d2f18cd1",
+    "spectro/munki_imp.c": "1c13cf7f6f44ce5691448f5ed76995b2bb3caca0cf935f3da3a144a19fbba150"
+  },
+  "ordinary_build": {
+    "command": "jam -q -fJambase -j3",
+    "exit_code": 0,
+    "warning_lines": 63,
+    "changed_driver_warning_lines": 0,
+    "confirmed_linked_tools": [
+      "spotread",
+      "chartread",
+      "dispread",
+      "dispcal",
+      "ccxxmake",
+      "illumread"
+    ],
+    "tools_executed": false,
+    "source_changes_for_build": false
+  },
+  "complete_changed_driver_objects": {
+    "dialect": "gnu89",
+    "implicit_function_declarations": "errors",
+    "return_types": "errors",
+    "result": "pass"
+  },
+  "regression_results": {
+    "spyder_selection": {
+      "predecessor_failures": 7,
+      "current_checks": 151,
+      "current_failures": 0
+    },
+    "specbos_recovery": {
+      "predecessor_failures": 40,
+      "current_checks": 400,
+      "current_failures": 0
+    },
+    "white_calibration": {
+      "predecessor_failures": 92,
+      "current_failures": 0
+    },
+    "i1pro_dark_prefixes": {
+      "current_cases": 20,
+      "current_failures": 0
+    },
+    "munki_dark_prefixes": {
+      "current_cases": 16,
+      "current_failures": 0
+    },
+    "munki_dark_completion": {
+      "predecessor_failures": 5,
+      "current_scenarios": 4,
+      "current_failures": 0
+    },
+    "each_spectral_converter": {
+      "families": [
+        "i1pro",
+        "i1pro3",
+        "munki"
+      ],
+      "predecessor_failures": 12,
+      "current_cases": 20,
+      "current_failures": 0
+    },
+    "each_scaled_output": {
+      "families": [
+        "i1pro",
+        "munki"
+      ],
+      "predecessor_failures": 4,
+      "current_cases": 10,
+      "current_failures": 0
+    },
+    "i1pro3_flash_scaling": {
+      "predecessor_failures": 2,
+      "current_cases": 5,
+      "current_failures": 0
+    },
+    "specbos_2501_LED": {
+      "predecessor_overlaps": 4,
+      "current_cases": 8,
+      "current_failures": 0
+    }
+  },
+  "combined_official_source_apply_and_reverse": "pass",
+  "independent_followup_apply_after_published_predecessor": "pass",
+  "windows_build_or_execution": false,
+  "linux_build_or_execution": false,
+  "hardware_validation": false,
+  "limitations": [
+    "Scripted transport and calibration helpers; no hardware reachability or optical accuracy claim.",
+    "Reduced probe structs and numerical stand-ins are not production ABI or CIE validation.",
+    "Dark tests execute selected prefixes; scan-branch ownership also relies on source inspection.",
+    "Other calibration repairs and allocation-error propagation are outside this selected export."
+  ]
+}
