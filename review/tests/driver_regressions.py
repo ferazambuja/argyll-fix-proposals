@@ -4,16 +4,19 @@
 Copyright 2026 Fernando Voltolini de Azambuja.
 SPDX-License-Identifier: GPL-2.0-or-later
 
-Requires a Git clone with the published predecessor, Python 3 and a C99 compiler.
+Requires Python 3 and a C99 compiler. The default checks work from a source ZIP.
+Optional --compare also checks predecessors in a full Git clone.
 Production changes use C89 syntax; the test scaffolding uses C99.
 No ordinary Argyll executable, constructor or device transport is run.
 """
 from collections import Counter
 from pathlib import Path
+import argparse
 import json
 import os
 import re
 import shlex
+import shutil
 import subprocess
 import tempfile
 
@@ -25,6 +28,16 @@ BEFORE = "e924058ee3b23e49be5053e0ab2bc73e727354c4"
 REVIEWED = "a3a12922613b59fcae56ba39e1d496b6ab8fa76c"
 MAINTAINER_REVIEWED = "7ab0f97927f8347950af04d1c63ffd0720f7b3bd"
 CC = shlex.split(os.environ.get("CC", "cc"))
+COMPARE = False
+
+
+def versions():
+    return (True, False) if COMPARE else (False,)
+
+
+def report(name, current, predecessor):
+    comparison = predecessor + "; " if COMPARE else ""
+    print("PASS " + name + ": " + comparison + "current " + current)
 
 
 def source(path, before=False):
@@ -66,7 +79,7 @@ def expect(result, failures, json_result=False):
 def spyder(tmp):
     names = ("spectro/spydX2.c", "spectro/inst.h", "spectro/disptechs.h",
              "spectro/icoms.h", "numlib/numsup.c", "icc/icc_util.c")
-    for before in (True, False):
+    for before in versions():
         texts = {name: source(name, before) for name in names}
         decl, funcs = _extract(source("spectro/spydX2.h", before), texts)
         funcs += "".join(_function(texts[names[0]], name) for name in (
@@ -78,7 +91,7 @@ def spyder(tmp):
                      ("-DSPYDX2_PATH_PROBE",))
         record = expect(result, 7 if before else 0, True)
         assert record["checks"] == 151, record
-    print("PASS Spyder selection: predecessor 7 failures; current 151 checks, 0 failures")
+    report("Spyder selection", "151 checks, 0 failures", "predecessor 7 failures")
 
 
 def specbos(tmp):
@@ -92,7 +105,7 @@ def specbos(tmp):
         for name in ("inst_opt_trig_prog", "inst_opt_trig_user")) + "\n};\n"
     decl += "".join(_define(source("spectro/specbos.h"), name)
                     for name in ("SPECBOS_SPOS_AMB", "SPECBOS_SPOS_EMIS"))
-    for before in (True, False):
+    for before in versions():
         text = source("spectro/specbos.c", before)
         local = decl + "".join(_define(text, name) for name in (
             "MAX_MES_SIZE", "MAX_RD_SIZE", "DEFAULT_NAV", "DEFAULT_TRANS_NAV", "EXPL1211AVG"))
@@ -108,14 +121,14 @@ def specbos(tmp):
                      ("-DCM_SPECBOS",))
         record = expect(result, 40 if before else 0, True)
         assert record["checks"] == 400, record
-    print("PASS Specbos recovery: predecessor 40 failures; current 400 checks, 0 failures")
+    report("Specbos recovery", "400 checks, 0 failures", "predecessor 40 failures")
 
 
 def conversions(tmp):
     harness = (HERE / "finite_conversion_probe.c").read_text()
     for family, selector in (("i1pro", 1), ("i1pro3", 2), ("munki", 3)):
         controls = None
-        for before in (True, False):
+        for before in versions():
             text = source("spectro/" + family + "_imp.c", before)
             header = source("spectro/" + family + "_imp.h")
             codes = "".join(_define(header, family.upper() + suffix)
@@ -140,9 +153,9 @@ def conversions(tmp):
             assert len(valid) == 13, valid
             if before:
                 controls = valid
-            else:
+            elif COMPARE:
                 assert valid == controls, "finite signed/zero controls changed"
-        print("PASS " + family + " conversion: predecessor 12 failures; current 20 cases, 0 failures")
+        report(family + " conversion", "20 cases, 0 failures", "predecessor 12 failures")
 
 
 def scaled(tmp):
@@ -155,7 +168,7 @@ def scaled(tmp):
             harness = harness.replace("state.nwav = 2; state.ms[0].cal_factor = factors;",
                                       "state.nwav[0] = 2; state.ms[0].cal_factor[0] = factors;")
         controls = None
-        for before in (True, False):
+        for before in versions():
             text = source("spectro/" + family + "_imp.c", before)
             funcs = "" if before else (_function(text, family + "_double_finite")
                                        + _function(text, family + "_scaled_finite"))
@@ -181,14 +194,15 @@ def scaled(tmp):
             assert len(valid) == 6
             if before:
                 controls = valid
-            else:
+            elif COMPARE:
                 assert valid == controls
-        print("PASS " + family + " calibrated output: predecessor 4 failures; current 10 cases, 0 failures")
+        report(family + " calibrated output", "10 cases, 0 failures", "predecessor 4 failures")
 
 
 def white(tmp):
     harness = (HERE / "white_calibration_probe.c").read_text()
-    for before in (True, False):
+    baseline = None
+    for before in versions():
         files = {}
         for name, family, marker in (
             ("reflective", "i1pro3", "\t\tif (s->cdate != cdate\n\t\t && (*calt & (inst_calt_ref_white"),
@@ -216,13 +230,13 @@ def white(tmp):
             baseline = len(found)
         else:
             expect(result, 0)
-    print("PASS white calibration: predecessor " + str(baseline) + " failures; current 0 failures")
+    report("white calibration", "0 failures", "predecessor " + str(baseline) + " failures")
 
 
 def dark(tmp):
     """Execute actual acquisition prefixes, including overwrite-before-error."""
     for family in ("i1pro", "munki"):
-        for before in (True, False):
+        for before in versions():
             text = source("spectro/" + family + "_imp.c", before)
             start = text.index(family + "_code " + family + "_imp_calibrate(")
             end = text.index("\n}\n", start)
@@ -290,7 +304,8 @@ static int measure(device *p,double *data,int count,double *time,int gain) {
             expect(result, len(wrappers) * 2 if before else 0)
         print("PASS " + family + " dark capture: " + str(len(wrappers) * 4)
               + " current prefix cases, 0 failures")
-    for before in (True, False):
+    baseline = None
+    for before in versions():
         text = source("spectro/munki_imp.c", before)
         start = "\t\t\tif (s->reflective) {\t/* We read the write reference - check it */"
         end = "\t\t\t*calt &= ~(inst_calt_ref_white\n\t\t\t         | inst_calt_trans_vwhite);"
@@ -307,8 +322,8 @@ static int measure(device *p,double *data,int count,double *time,int gain) {
             baseline = len(found)
         else:
             expect(result, 0)
-    print("PASS ColorMunki inner-dark completion: predecessor " + str(baseline)
-          + " failures; current 4 scenarios, 0 failures")
+    report("ColorMunki inner-dark completion", "4 scenarios, 0 failures",
+           "predecessor " + str(baseline) + " failures")
 
 
 def flash(tmp):
@@ -351,7 +366,7 @@ int main(void) {
  printf("flash: %d failures\\n",failures);return failures!=0;
 }
 """
-    for before in (True, False):
+    for before in versions():
         text = source("spectro/i1pro3_imp.c", before)
         start = text.index("\t\tvect_mul(wav_sample[0], s->cal_factor[hr], m->nwav[hr]);")
         end = text.index("\n\t}", start)
@@ -362,12 +377,12 @@ int main(void) {
         result = run(tmp, "flash-" + str(before), current,
                      {"codes.inc": codes, "flash.inc": text[start:end]})
         expect(result, 2 if before else 0)
-    print("PASS i1pro3 flash scaling: predecessor 2 failures; current 5 cases, 0 failures")
+    report("i1pro3 flash scaling", "5 cases, 0 failures", "predecessor 2 failures")
 
 
 def calibration_cleanup(tmp):
     """Check every return while i1Pro3's per-mode loop owns a faked mode."""
-    for before in (True, False):
+    for before in versions():
         text = (subprocess.check_output(["git", "show", REVIEWED + ":spectro/i1pro3_imp.c"],
                                         cwd=ROOT, text=True) if before
                 else source("spectro/i1pro3_imp.c"))
@@ -416,12 +431,12 @@ printf("cleanup: %d failures\\n",bad);return bad!=0;
 """
         result = run(tmp, "calibration-cleanup-" + str(before), harness, {})
         expect(result, 7 if before else 0)
-    print("PASS i1pro3 cleanup: reviewed source 7 failures; current 16 exit cases, 0 failures")
+    report("i1pro3 cleanup", "16 exit cases, 0 failures", "reviewed source 7 failures")
 
 
 def integration_selection(tmp):
     harness = (HERE / "i1pro3_calibration_probe.c").read_text()
-    for before in (True, False):
+    for before in versions():
         text = (subprocess.check_output(["git", "show", REVIEWED + ":spectro/i1pro3_imp.c"],
                                         cwd=ROOT, text=True) if before
                 else source("spectro/i1pro3_imp.c"))
@@ -486,11 +501,11 @@ def integration_selection(tmp):
                                      "zero_maximum", "negative_maximum"}, failures
         else:
             assert not failures, failures
-    print("PASS i1pro3 integration selection: reviewed source 11 failures; current 16 scenarios, 0 failures")
+    report("i1pro3 integration selection", "16 scenarios, 0 failures", "reviewed source 11 failures")
 
 
 def munki_recovery(tmp):
-    for before in (True, False):
+    for before in versions():
         text = (subprocess.check_output(
             ["git", "show", MAINTAINER_REVIEWED + ":spectro/munki_imp.c"], cwd=ROOT, text=True)
             if before else source("spectro/munki_imp.c"))
@@ -510,7 +525,7 @@ def munki_recovery(tmp):
         failed = expect(result, 3 if before else 0)
         if before:
             assert set(failed) == {"invalid_white", "retry_failed_dark", "retry_dark_failure"}, failed
-    print("PASS ColorMunki calibration: reviewed source 3 failures; current 7 scenarios, 0 failures")
+    report("ColorMunki calibration", "7 scenarios, 0 failures", "reviewed source 3 failures")
 
 
 def finite_producers(tmp):
@@ -534,6 +549,24 @@ def finite_producers(tmp):
 
 
 def main():
+    global COMPARE
+    parser = argparse.ArgumentParser(
+        description="Run inert current-source checks. Works from an extracted source ZIP; no Git history needed.")
+    parser.add_argument("--compare", action="store_true",
+                        help="also verify historical failures and compare finite controls (requires full Git history)")
+    COMPARE = parser.parse_args().compare
+    if not CC or not shutil.which(CC[0]):
+        parser.error("C compiler not found. Install a C99 compiler or set CC to its command.")
+    if COMPARE:
+        if not shutil.which("git"):
+            parser.error("--compare needs Git. Omit --compare to check the downloaded source.")
+        for revision in (BEFORE, REVIEWED, MAINTAINER_REVIEWED):
+            result = subprocess.run(["git", "cat-file", "-e", revision + "^{commit}"],
+                                    cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if result.returncode:
+                parser.error("--compare needs full Git history. Omit --compare to check the downloaded source.")
+    print("Checking predecessors and current source." if COMPARE else
+          "Checking current source only; Git history is not used.")
     with tempfile.TemporaryDirectory(prefix="argyll-driver-regression-") as tmp:
         folder = Path(tmp)
         spyder(folder)

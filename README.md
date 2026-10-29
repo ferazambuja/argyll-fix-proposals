@@ -32,14 +32,21 @@ The original review note retains its source-function evidence for the array-capa
 
 The complete source diff applies and reverses exactly on official 3.5.0. Each of the original four follow-up source commits also applies independently after the published proposal tip `e924058`. That tip includes the capacity repair, XYZ-only conversion ordering and #706 mutex fix. The i1Pro3 cleanup follow-up applies after the reviewed `a3a1292` tip. In particular, the finite-result proposal retains the earlier conversion order. When taking that proposal alone, use the [standalone finite-results patch](review/finite-results.patch), which includes its own dated modification notices. Earlier development-snapshot comparisons retain their original scope in the two older notes; the new exports were validated against stable 3.5.0.
 
-From a full Git clone containing the predecessor commits, run the source regressions with Python 3 and a C99 compiler (`cc`, or set `CC`), followed by the #706 real-mutex test with POSIX threads:
+For a quick review, [download the source ZIP](https://github.com/ferazambuja/argyll-fix-proposals/archive/refs/heads/codex/instrument-fix-proposals.zip), extract it, and run this from the extracted folder:
 
 ```sh
 python3 -B review/tests/driver_regressions.py
+```
+
+This checks the current source, including the ColorMunki retry and actual nonfinite-producer cases. It needs only Python 3 and a C99 compiler (`cc`, or set `CC`). No Git checkout/history, Python packages, Argyll build or instruments are needed. Temporary compiler products are removed automatically.
+
+The separate #706 real-mutex test needs POSIX threads and also works from the ZIP:
+
+```sh
 python3 -B spectro/specbos_lock_test.py
 ```
 
-All current regressions pass, and their predecessor failure counts are checked. The probes execute actual functions or bounded source fragments with scripted transport/calibration helpers and reduced structs; converter tests use numerical stand-ins. Their C99 scaffolding is separate from the C89 syntax used by the production changes.
+Optional developer comparison: from a full Git clone, `python3 -B review/tests/driver_regressions.py --compare` also reproduces the documented predecessor failures and compares finite-control outputs across revisions. These historical comparisons are additional to the default current-source checks. Both modes pass. The probes execute actual functions or bounded source fragments with scripted transport/calibration helpers and reduced structs; converter tests use numerical stand-ins. Their C99 scaffolding is separate from the C89 syntax used by the production changes.
 
 The 28 October additions use real headers for seven complete ColorMunki calibration scenarios and five constructed-input producer/control cases. The producer probe executes actual interpolation/custom-filter division and ColorMunki transmission white-factor/scaling arithmetic. Zero filter divisors and an all-zero white produce nonfinite spectral results in these bounded checks. This does not establish a physical-instrument trigger, complete file-to-reading behavior, or CIE correctness. See the [updated review note](review/PRIORITY_FIXES.md#nonfinite-spectralxyz-results) for the exact causes and limits.
 

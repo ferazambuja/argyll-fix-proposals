@@ -169,5 +169,16 @@
     "dated_notices": true,
     "apply_and_reverse": "pass",
     "finite_function_identity_with_current_source": "pass"
+  },
+  "runner_workflows": {
+    "default": {
+      "command": "python3 -B review/tests/driver_regressions.py",
+      "git_required": false,
+      "verification": "pass from extracted ZIP export with no .git, Git calls forbidden, and a path containing spaces"
+    },
+    "historical_comparison": {
+      "command": "python3 -B review/tests/driver_regressions.py --compare",
+      "result": "pass"
+    }
   }
 }

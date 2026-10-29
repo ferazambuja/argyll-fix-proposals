@@ -99,14 +99,21 @@ The build used the unchanged `Jambase`, `Jamtop`, `Jamfile` and subdirectory bui
 
 Those five drivers also separately compiled as complete objects using `-std=gnu89`, `-Werror=implicit-function-declaration` and `-Werror=return-type`, with ordinary project headers. On 28 October the complete changed ColorMunki object was freshly compiled with the ordinary USB/serial feature definitions and no diagnostics; the other four C files are byte-identical to `70c6f9b` and reuse its object checks. The full ordinary Jam build has not been repeated after this small follow-up. This supports the changed code's dialect/interface fit; it is not strict-C89 qualification of the complete upstream tree or a test with an old Visual C++ compiler.
 
-From a full Git clone containing predecessors `e924058`, `a3a1292` and `7ab0f97`, reproduce the focused checks with Python 3 and a C99 compiler (`cc`, or set `CC`), then the POSIX-thread LED check:
+For the simplest review, [download the source ZIP](https://github.com/ferazambuja/argyll-fix-proposals/archive/refs/heads/codex/instrument-fix-proposals.zip), extract it, and run the current-source checks from its root with Python 3 and a C99 compiler (`cc`, or set `CC`):
 
 ```sh
 python3 -B review/tests/driver_regressions.py
+```
+
+Git and predecessor history are not used by this command. No Python packages, Argyll build or instruments are needed. The actual producer reproductions are included. To also reproduce the documented predecessor failures and compare finite-control outputs across revisions, developers with a full Git clone containing `e924058`, `a3a1292` and `7ab0f97` can optionally add `--compare`. The runner labels the selected mode explicitly; both modes pass.
+
+The separate POSIX-thread LED check also works from the ZIP:
+
+```sh
 python3 -B spectro/specbos_lock_test.py
 ```
 
-The test scaffold uses C99 separately from the C89 production changes. It reads actual current source and headers and retrieves predecessor bytes from Git. Compiler products and generated extracts live in temporary directories and are removed. These scripts execute only inert probes. No ordinary Argyll tool, discovery, calibration or measurement was run. The temporary ordinary build was also removed after recording its result.
+The test scaffold uses C99 separately from the C89 production changes. It reads actual current source and headers; only optional `--compare` retrieves predecessor bytes from Git. Compiler products and generated extracts live in temporary directories and are removed. These scripts execute only inert probes. No ordinary Argyll tool, discovery, calibration or measurement was run. The temporary ordinary build was also removed after recording its result.
 
 The source changes use Argyll's own cross-platform driver interfaces and contain no new OS branches. Windows/Linux compilation, execution, legacy compiler behavior, real transport, optical accuracy and hardware validation remain unverified. A macOS build cannot establish those results. Source review, ordinary linking and bounded regression evidence are the basis for offering these proposals to the maintainer.
 
